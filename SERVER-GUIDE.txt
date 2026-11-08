@@ -1,0 +1,33 @@
+SILLY DUEL - ONLINE SERVER GUIDE
+================================
+The server does three jobs: instant matchmaking, friend rooms (2 to 10 players) and the knockout party bracket.
+It needs NO packages and NO login. Just Node.js 16 or newer (https://nodejs.org).
+
+A) PLAY ON LOCAL WIFI OR A HOTSPOT (no internet needed)
+   1. One person runs the server on a laptop (or a phone with Termux):
+          node server/server.js
+      It prints addresses like:  http://192.168.1.5:3000
+   2. Everyone connects to the same wifi / hotspot and opens that address in their phone browser.
+   3. Tap ROOM > MAKE A ROOM. Friends tap ROOM > JOIN WITH A CODE.
+   Keep the server window open. The game files come from the server too, so nothing else is needed.
+   Tip: if friends cannot open the address, allow Node through the computer's firewall, and make sure the hotspot does not have "client isolation" on.
+
+B) PLAY OVER THE INTERNET
+   Put the whole folder on any Node host and run "npm start" (it reads the PORT variable):
+     - Render.com: New > Web Service > connect the repo, Start Command: npm start (free plan sleeps after 15 min idle, first request wakes it)
+     - Railway / Fly.io / any $5 VPS: same command.
+   Share the address it gives you (https://something.onrender.com). Players open it and play. Nothing else to configure.
+
+   If you keep the game files on GitHub Pages or CrazyGames-style static hosting and the server somewhere else, edit js/server-config.js:
+          SD.serverUrl = 'wss://your-server.onrender.com/ws';
+
+C) HOW THE MODES WORK
+   MATCH  : instant match with someone waiting, closest level first. Ranked (counts for level and coins).
+   ROOM   : make a room, share the code or link. The host sees START, which works only for 2, 4, 6, 8 or 10 players (even).
+            2 players = a normal match. 4 or more = bracket: each pair taps READY, then plays first to 2 wins.
+            Players who lost, or are waiting, watch live matches (score, game name, taps). The final is watched by everyone.
+            The last player standing gets the WINNER WINNER trophy card to share.
+            With 6 or 10 players a round can have an odd number of winners, so one random winner gets a bye.
+   Arena: the play room is the one of the higher-level player in the pair.
+
+D) HEALTH CHECK: open /health on the server address, it says "ok".

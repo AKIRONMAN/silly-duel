@@ -1,0 +1,22 @@
+/* rarity tiers: COMMON, UNCOMMON, RARE, EPIC, LEGENDARY, MYTHIC */
+.rar-pill { display: inline-block; padding: 2px 10px; font: 700 10px var(--font-p); letter-spacing: .8px; color: #fff; border: 2px solid var(--ink); border-radius: 99px; text-shadow: 0 1px 0 rgba(0,0,0,.4); margin-bottom: 3px; }
+.wd-tile { border-color: var(--rc, var(--ink)); }
+.wd-tile.sel { border-color: var(--ink); }
+.wd-preview { position: relative; }
+.wd-preview::before { content: ''; position: absolute; inset: -14%; border-radius: 50%; z-index: -1; opacity: 0; background: radial-gradient(circle, var(--rc) 0%, transparent 68%); }
+.aura-2::before, .aura-3::before, .aura-4::before, .aura-5::before { opacity: .5; }
+.aura-3::before { opacity: .65; animation: auraPulse 2s ease-in-out infinite; }
+.aura-4::before { opacity: .8; animation: auraPulse 1.4s ease-in-out infinite; }
+.aura-5::before { opacity: .9; background: conic-gradient(#ff4fd8, #ffd23f, #4dffb0, #4dd2ff, #a45cff, #ff4fd8); filter: blur(10px); animation: auraSpin 3s linear infinite; }
+@keyframes auraPulse { 0%,100% { transform: scale(.94); } 50% { transform: scale(1.08); } }
+@keyframes auraSpin { to { transform: rotate(360deg); } }
+/* glow around the character in matches and menus */
+.face.rar-2 { filter: drop-shadow(0 0 3px #2f8cff); }
+.face.rar-3 { filter: drop-shadow(0 0 5px #a45cff); }
+.face.rar-4 { filter: drop-shadow(0 0 6px #ffb300) drop-shadow(0 0 12px rgba(255,179,0,.6)); }
+.face.rar-5 { animation: mythGlow 2.4s linear infinite; }
+@keyframes mythGlow { 0% { filter: drop-shadow(0 0 7px #ff4fd8) drop-shadow(0 0 14px #ff4fd8); } 33% { filter: drop-shadow(0 0 7px #ffd23f) drop-shadow(0 0 14px #ffd23f); } 66% { filter: drop-shadow(0 0 7px #4dd2ff) drop-shadow(0 0 14px #4dd2ff); } 100% { filter: drop-shadow(0 0 7px #ff4fd8) drop-shadow(0 0 14px #ff4fd8); } }
+.wd-tile.locked .face { filter: none; animation: none; }
+.wd-preview .face.shade, .shade { animation: none !important; }
+.wd-preview { isolation: isolate; }
+.face { overflow: visible; }

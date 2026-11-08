@@ -1,0 +1,366 @@
+/* Online layer: Firebase (free plan) for login, leaderboard, lobby and signaling,
+   plus a direct WebRTC data channel so the two phones talk to each other without a server.
+   Firebase is only used to find a partner and say hello. The game itself runs phone to phone. */
+window.SD = window.SD || {};
+(function () {
+  'use strict';
+  var st = SD.store;
+  var V = '10.14.1', BASE = 'https://www.gstatic.com/firebasejs/' + V + '/';
+  var FB = null, loadP = null;
+
+  function configured() { var c = SD.firebaseConfig; return !!(c && c.apiKey && c.projectId); }
+  function cleanName(n) { n = (n || '').trim(); return /^[A-Za-z0-9_]{3,12}$/.test(n) ? n : ''; }
+
+  function nice(e) {
+    var c = (e && (e.code || e.message)) || '';
+    if (/email-already-in-use|credential-already-in-use/.test(c)) return 'NAME TAKEN';
+    if (/weak-password/.test(c)) return 'PASSWORD: 6+ LETTERS';
+    if (/wrong-password|invalid-credential|user-not-found|invalid-login/.test(c)) return 'WRONG NAME OR PASSWORD';
+    if (/operation-not-allowed|admin-restricted/.test(c)) return 'TURN ON LOGIN IN FIREBASE';
+    if (/network|NETWORK/.test(c)) return 'CANNOT REACH THE ROOM SERVER. CHECK INTERNET';
+    if (/permission-denied/.test(c)) return 'FIREBASE RULES BLOCKED THIS';
+    if (/too-many/.test(c)) return 'WAIT A MINUTE, TRY AGAIN';
+    if (/popup-closed|cancelled-popup|user-cancelled/.test(c)) return 'GOOGLE LOGIN CANCELLED';
+    if (/popup-blocked/.test(c)) return 'ALLOW POPUPS, THEN TRY AGAIN';
+    if (/unauthorized-domain/.test(c)) return 'ADD THIS SITE IN FIREBASE: AUTH, SETTINGS, AUTHORIZED DOMAINS';
+    if (/operation-not-supported|web-storage-unsupported/.test(c)) return 'OPEN THE GAME IN CHROME OR SAFARI FOR GOOGLE LOGIN';
+    return 'SOMETHING WENT WRONG';
+  }
+
+  /* ---------- Firebase backend ---------- */
+  function load() {
+    if (loadP) return loadP;
+    loadP = Promise.all([import(BASE + 'firebase-app.js'), import(BASE + 'firebase-auth.js'), import(BASE + 'firebase-firestore.js')]).then(function (m) {
+      var app = m[0].initializeApp(SD.firebaseConfig);
+      FB = { a: m[1], f: m[2], auth: m[1].getAuth(app), db: m[2].getFirestore(app) };
+      return FB;
+    });
+    return loadP;
+  }
+  function me() {
+    var u = FB && FB.auth.currentUser;
+    if (!u) return null;
+    return { uid: u.uid, name: u.isAnonymous ? st.name(0) : (u.displayName || st.name(0)), anon: u.isAnonymous };
+  }
+  function ref(path) { var p = path.split('/'); return FB.f.doc.apply(null, [FB.db].concat(p)); }
+  function coll(path) { return FB.f.collection.apply(null, [FB.db].concat(path.split('/'))); }
+
+  var fb = {
+    name: 'firebase',
+    init: function () {
+      return load().then(function () { return FB.auth.authStateReady ? FB.auth.authStateReady() : null; })
+        .then(function () { if (!FB.auth.currentUser) return FB.a.signInAnonymously(FB.auth); })
+        .then(me);
+    },
+    user: me,
+    google: function () {
+      var prov = new FB.a.GoogleAuthProvider(), cu = FB.auth.currentUser;
+      var p = cu && cu.isAnonymous
+        ? FB.a.linkWithPopup(cu, prov).catch(function (e) {
+            if (/credential-already-in-use/.test((e && e.code) || '')) { var cr = FB.a.GoogleAuthProvider.credentialFromError(e); if (cr) return FB.a.signInWithCredential(FB.auth, cr); }
+            throw e;
+          })
+        : FB.a.signInWithPopup(FB.auth, prov);
+      return p.then(function () {
+        var u = FB.auth.currentUser;
+        return fb.loadProfile().catch(function () { return null; }).then(function (prof) {
+          var first = String(u.displayName || '').split(' ')[0].replace(/[^A-Za-z0-9_]/g, '').toUpperCase().slice(0, 12);
+          var name = (prof && prof.name) || (first.length >= 3 ? first : st.name(0));
+          return FB.a.updateProfile(u, { displayName: name });
+        });
+      }).then(me);
+    },
+    logout: function () { return FB.a.signOut(FB.auth).then(function () { return FB.a.signInAnonymously(FB.auth); }).then(me); },
+    saveProfile: function (p) { return FB.f.setDoc(ref('users/' + FB.auth.currentUser.uid), p, { merge: true }); },
+    loadProfile: function () { return FB.f.getDoc(ref('users/' + FB.auth.currentUser.uid)).then(function (s) { return s.exists() ? s.data() : null; }); },
+    leaderboard: function () {
+      var q = FB.f.query(coll('users'), FB.f.orderBy('owins', 'desc'), FB.f.limit(100));
+      return FB.f.getDocs(q).then(function (s) { return s.docs.map(function (d) { var x = d.data(); x.uid = d.id; return x; }); });
+    },
+    lobbyList: function (minLevel, maxLevel) {
+      var q = FB.f.query(coll('lobby'), FB.f.where('level', '>=', minLevel), FB.f.where('level', '<=', maxLevel), FB.f.orderBy('level'), FB.f.limit(12));
+      return FB.f.getDocs(q).then(function (s) { return s.docs.map(function (d) { return d.data(); }); });
+    },
+    lobbyPut: function (e) { return FB.f.setDoc(ref('lobby/' + e.uid), e); },
+    lobbyRemove: function () { var u = FB.auth.currentUser; return u ? FB.f.deleteDoc(ref('lobby/' + u.uid)).catch(function () {}) : Promise.resolve(); },
+    roomCreate: function (id, info) { return FB.f.setDoc(ref('rooms/' + id), { host: info, guest: null, ts: Date.now() }); },
+    roomJoin: function (id, info) {
+      var r = ref('rooms/' + id);
+      return FB.f.runTransaction(FB.db, function (tx) {
+        return tx.get(r).then(function (s) {
+          if (!s.exists()) throw new Error('NOROOM');
+          var d = s.data();
+          if (d.guest) throw new Error('FULL');
+          tx.update(r, { guest: info });
+          return d.host;
+        });
+      });
+    },
+    roomWatch: function (id, cb) { return FB.f.onSnapshot(ref('rooms/' + id), function (s) { cb(s.exists() ? s.data() : null); }); },
+    roomSet: function (id, patch) { return FB.f.updateDoc(ref('rooms/' + id), patch); },
+    iceAdd: function (id, side, c) { return FB.f.addDoc(coll('rooms/' + id + '/ice'), { side: side, c: c }); },
+    iceWatch: function (id, side, cb) {
+      return FB.f.onSnapshot(coll('rooms/' + id + '/ice'), function (snap) {
+        snap.docChanges().forEach(function (ch) { if (ch.type === 'added' && ch.doc.data().side === side) cb(ch.doc.data().c); });
+      });
+    },
+    roomDelete: function (id) {
+      return FB.f.getDocs(coll('rooms/' + id + '/ice')).then(function (s) {
+        return Promise.all(s.docs.map(function (d) { return FB.f.deleteDoc(d.ref); }));
+      }).then(function () { return FB.f.deleteDoc(ref('rooms/' + id)); }).catch(function () {});
+    }
+  };
+
+  /* ---------- direct phone to phone link (WebRTC data channel) ---------- */
+  function iceServers() {
+    return SD.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }];
+  }
+  function peerConnect(role, id, ms) {
+    var B = N.backend;
+    return new Promise(function (resolve, reject) {
+      var pc = new RTCPeerConnection({ iceServers: iceServers() });
+      var unsubs = [], queue = [], haveRemote = false, settled = false, peer = null, gotOffer = false, gotAnswer = false, tm;
+      function cleanup() { clearTimeout(tm); unsubs.forEach(function (f) { try { f(); } catch (_) {} }); unsubs = []; }
+      function fail(e) { if (settled) return; settled = true; cleanup(); try { pc.close(); } catch (_) {} reject(e || { code: 'CONNECT' }); }
+      tm = setTimeout(function () { fail({ code: 'CONNECT' }); }, ms);
+      function remoteSet() { haveRemote = true; queue.splice(0).forEach(function (c) { pc.addIceCandidate(c).catch(function () {}); }); }
+      function addCand(c) { var cand; try { cand = JSON.parse(c); } catch (_) { return; } if (haveRemote) pc.addIceCandidate(cand).catch(function () {}); else queue.push(cand); }
+      pc.onicecandidate = function (e) { if (e.candidate) B.iceAdd(id, role, JSON.stringify(e.candidate)); };
+      pc.onconnectionstatechange = function () {
+        var s = pc.connectionState;
+        if (s === 'failed') { if (!settled) fail({ code: 'CONNECT' }); else if (peer && !peer._closed) { peer._closed = true; if (peer.onclose) peer.onclose(); } }
+        else if ((s === 'disconnected' || s === 'closed') && peer && !peer._closed) { peer._closed = true; if (peer.onclose) peer.onclose(); }
+      };
+      function wire(dc) {
+        var handler = null, q = [];
+        peer = { send: function (o) { try { if (dc.readyState === 'open') dc.send(JSON.stringify(o)); } catch (_) {} }, close: function () { try { dc.close(); pc.close(); } catch (_) {} }, onclose: null };
+        Object.defineProperty(peer, 'onmessage', { get: function () { return handler; }, set: function (f) { handler = f; if (f) q.splice(0).forEach(f); } });
+        dc.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (_) { return; } if (handler) handler(m); else q.push(m); };
+        dc.onclose = function () { if (peer && !peer._closed) { peer._closed = true; if (peer.onclose) peer.onclose(); } };
+        var opened = function () { if (settled) return; settled = true; cleanup(); resolve(peer); };
+        dc.onopen = opened;
+        if (dc.readyState === 'open') opened();
+      }
+      unsubs.push(B.iceWatch(id, role === 'host' ? 'guest' : 'host', addCand));
+      if (role === 'host') {
+        wire(pc.createDataChannel('d'));
+        pc.createOffer().then(function (o) { return pc.setLocalDescription(o); })
+          .then(function () { return B.roomSet(id, { offer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } }); }).catch(fail);
+        unsubs.push(B.roomWatch(id, function (r) {
+          if (r && r.answer && !gotAnswer) { gotAnswer = true; pc.setRemoteDescription(r.answer).then(remoteSet).catch(fail); }
+        }));
+      } else {
+        pc.ondatachannel = function (e) { wire(e.channel); };
+        unsubs.push(B.roomWatch(id, function (r) {
+          if (r && r.offer && !gotOffer) {
+            gotOffer = true;
+            pc.setRemoteDescription(r.offer).then(function () { remoteSet(); return pc.createAnswer(); })
+              .then(function (a) { return pc.setLocalDescription(a); })
+              .then(function () { return B.roomSet(id, { answer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } }); }).catch(fail);
+          }
+        }));
+      }
+    });
+  }
+
+  /* ---------- finding a partner ---------- */
+  function myInfo() {
+    var u = N.backend.user();
+    return { uid: u.uid, name: u.name, level: st.get('level') | 0 || 1, skin: st.get('skins')[0] | 0 };
+  }
+
+  function hostWait(job, id, info, ms, lobby) {
+    var B = N.backend;
+    return B.roomCreate(id, info).then(function () {
+      if (lobby) B.lobbyPut({ uid: info.uid, name: info.name, level: info.level, skin: info.skin, room: id, ts: Date.now() });
+      return new Promise(function (res, rej) {
+        var un = null, ended = false, t;
+        function end(delRoom) {
+          if (ended) return; ended = true; clearTimeout(t);
+          if (un) un();
+          if (lobby) B.lobbyRemove();
+          if (delRoom) B.roomDelete(id);
+        }
+        t = setTimeout(function () { end(true); rej({ code: 'NOBODY' }); }, ms);
+        job.stop = function () { end(true); rej({ code: 'CANCEL' }); };
+        un = B.roomWatch(id, function (r) {
+          if (r && r.guest && !ended) { end(false); res({ role: 'host', id: id, opp: r.guest }); }
+        });
+        if (ended && un) un();
+      });
+    });
+  }
+
+  function link(job, found, myName) {
+    var B = N.backend;
+    if (job.cancelled) return Promise.reject({ code: 'CANCEL' });
+    return peerConnect(found.role, found.id, 15000).then(function (peer) {
+      if (found.role === 'host') B.roomDelete(found.id);
+      var conn = { peer: peer, role: found.role, id: found.id, opp: found.opp, myName: myName, againMe: false, againPeer: false };
+      if (found.role === 'host') {
+        conn.seed = (Math.random() * 4294967296) >>> 0;
+        peer.send({ t: 'start', seed: conn.seed });
+        return conn;
+      }
+      return new Promise(function (res, rej) {
+        var t = setTimeout(function () { rej({ code: 'CONNECT' }); }, 8000);
+        peer.onmessage = function (m) { if (m && m.t === 'start') { clearTimeout(t); conn.seed = m.seed; res(conn); } };
+      });
+    });
+  }
+
+  /* ---------- rooms without any setup: free public PeerJS broker ---------- */
+  var PEERJS_URL = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+  function loadPeerJs() {
+    if (window.Peer) return Promise.resolve();
+    return new Promise(function (res, rej) {
+      var s = document.createElement('script'); s.src = PEERJS_URL; s.onload = res;
+      s.onerror = function () { rej({ code: 'NETWORK' }); };
+      document.head.appendChild(s);
+    });
+  }
+  function localInfo() { return { uid: 'local', name: st.name(0), level: st.get('level') | 0 || 1, skin: st.get('skins')[0] | 0 }; }
+  function wrapConn(conn, pr) {
+    var handler = null, q = [], closed = false;
+    var peer = {
+      send: function (o) { try { if (conn.open) conn.send(o); } catch (_) {} },
+      close: function () { try { conn.close(); } catch (_) {} try { pr.destroy(); } catch (_) {} },
+      onclose: null
+    };
+    Object.defineProperty(peer, 'onmessage', { get: function () { return handler; }, set: function (f) { handler = f; if (f) q.splice(0).forEach(f); } });
+    conn.on('data', function (m) { if (handler) handler(m); else q.push(m); });
+    function gone() { if (!closed) { closed = true; if (peer.onclose) peer.onclose(); } }
+    conn.on('close', gone); conn.on('error', gone);
+    return peer;
+  }
+  function peerMake(job, onCode) {
+    var info = localInfo(), letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ', tries = 0, pr = null;
+    return loadPeerJs().then(function () {
+      return new Promise(function (res, rej) {
+        function attempt() {
+          var code = ''; for (var k = 0; k < 4; k++) code += letters.charAt(Math.floor(Math.random() * letters.length));
+          onCode(code);
+          pr = new window.Peer('sd-' + code, SD.peerOpts || {});
+          pr.on('error', function (e) {
+            if (e.type === 'unavailable-id' && tries++ < 4) { try { pr.destroy(); } catch (_) {} attempt(); }
+            else { try { pr.destroy(); } catch (_) {} rej({ code: 'NETWORK' }); }
+          });
+          pr.on('connection', function (c) {
+            var me = pr;
+            c.on('open', function () {
+              var peer = wrapConn(c, me);
+              peer.onmessage = function (m) {
+                if (!m || m.t !== 'hi') return;
+                var conn = { peer: peer, role: 'host', id: code, opp: m.info, myName: info.name, againMe: false, againPeer: false, seed: (Math.random() * 4294967296) >>> 0 };
+                peer.send({ t: 'hi', info: info }); peer.send({ t: 'start', seed: conn.seed });
+                res(conn);
+              };
+            });
+          });
+        }
+        job.stop = function () { try { if (pr) pr.destroy(); } catch (_) {} rej({ code: 'CANCEL' }); };
+        attempt();
+      });
+    });
+  }
+  function peerJoin(job, code) {
+    var info = localInfo();
+    return loadPeerJs().then(function () {
+      return new Promise(function (res, rej) {
+        var pr = new window.Peer(SD.peerOpts || {}), tm = setTimeout(function () { try { pr.destroy(); } catch (_) {} rej({ code: 'CONNECT' }); }, 15000);
+        job.stop = function () { clearTimeout(tm); try { pr.destroy(); } catch (_) {} rej({ code: 'CANCEL' }); };
+        pr.on('error', function (e) { clearTimeout(tm); try { pr.destroy(); } catch (_) {} rej(e.type === 'peer-unavailable' ? { message: 'NOROOM' } : { code: 'NETWORK' }); });
+        pr.on('open', function () {
+          var c = pr.connect('sd-' + code, { reliable: true, serialization: 'json' });
+          c.on('open', function () {
+            var peer = wrapConn(c, pr), opp = null;
+            peer.send({ t: 'hi', info: info });
+            peer.onmessage = function (m) {
+              if (!m) return;
+              if (m.t === 'hi') opp = m.info;
+              else if (m.t === 'start') { clearTimeout(tm); res({ peer: peer, role: 'guest', id: code, opp: opp || { name: 'FRIEND', level: 1, skin: 1 }, myName: info.name, seed: m.seed, againMe: false, againPeer: false }); }
+            };
+          });
+        });
+      });
+    });
+  }
+
+  function newJob() {
+    if (N.job) N.job.cancel();
+    var job = { cancelled: false, stop: null, cancel: function () { job.cancelled = true; if (job.stop) job.stop(); } };
+    N.job = job;
+    return job;
+  }
+
+  var N = SD.net = {
+    backend: fb,
+    configured: configured,
+    cleanName: cleanName,
+    nice: nice,
+    peerConnect: peerConnect,
+    loadPeerJs: loadPeerJs, wrapConn: wrapConn, localInfo: localInfo,
+    cancel: function () { if (N.job) N.job.cancel(); N.job = null; },
+
+    /* looks for someone waiting at my level up to 3 levels above, otherwise waits for 15 seconds. These matches are rated. */
+    quick: function (onStatus) {
+      var B = N.backend, job = newJob(), info = myInfo();
+      return B.lobbyList(info.level, info.level + 3).then(function (list) {
+        var now = Date.now();
+        list = list.filter(function (e) { return e.uid !== info.uid && e.room && now - e.ts < 45000; }).sort(function (a, b) { return a.level - b.level; });
+        function tryNext(i) {
+          if (job.cancelled) return Promise.reject({ code: 'CANCEL' });
+          if (i >= list.length) return Promise.resolve(null);
+          return B.roomJoin(list[i].room, info).then(function (host) { return { role: 'guest', id: list[i].room, opp: host }; }, function () { return tryNext(i + 1); });
+        }
+        return tryNext(0);
+      }).then(function (found) {
+        if (found) return found;
+        if (onStatus) onStatus('waiting');
+        return hostWait(job, info.uid, info, 15000, true);
+      }).then(function (found) { if (onStatus) onStatus('connecting'); return link(job, found, info.name); }).then(function (c) { c.kind = 'random'; return c; });
+    },
+
+    /* a private room with a 4 letter code */
+    makeRoom: function (onCode) {
+      if (!configured()) return peerMake(newJob(), onCode).then(function (c) { c.kind = 'room'; return c; });
+      var job = newJob(), info = myInfo(), letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ', code = '';
+      for (var k = 0; k < 4; k++) code += letters.charAt(Math.floor(Math.random() * letters.length));
+      onCode(code);
+      return hostWait(job, code, info, 180000, false).then(function (found) { return link(job, found, info.name); }).then(function (c) { c.kind = 'room'; return c; });
+    },
+    joinRoom: function (code, onStatus) {
+      code = (code || '').toUpperCase().replace(/[^A-Z]/g, '');
+      if (!configured()) return peerJoin(newJob(), code).then(function (c) { c.kind = 'room'; return c; });
+      var job = newJob(), info = myInfo();
+      return N.backend.roomJoin(code, info).then(function (host) {
+        if (onStatus) onStatus('connecting');
+        return link(job, { role: 'guest', id: code, opp: host }, info.name);
+      }).then(function (c) { c.kind = 'room'; return c; });
+    },
+
+    /* keep my profile in the cloud: leaderboard, and progress follows my login */
+    sync: function () {
+      if (!configured() || !FB || !FB.auth.currentUser) return Promise.resolve();
+      var m = me();
+      return N.backend.saveProfile({
+        name: m.name, level: st.get('level') | 0, xp: st.get('xp') | 0, unlocked: st.get('unlocked'), skin: st.get('skins')[0] | 0,
+        owins: st.get('owins') | 0, olosses: st.get('olosses') | 0, ts: Date.now()
+      }).catch(function () {});
+    },
+    /* after login: take the cloud progress if it is further than this device */
+    adopt: function () {
+      return N.backend.loadProfile().then(function (p) {
+        if (!p) return N.sync();
+        var cloud = (p.level | 0) * 100000 + (p.xp | 0), local = (st.get('level') | 0) * 100000 + (st.get('xp') | 0);
+        if (cloud > local) {
+          st.set('level', p.level | 0); st.set('xp', p.xp | 0);
+          if (Array.isArray(p.unlocked)) st.set('unlocked', p.unlocked);
+          var sk = st.get('skins').slice(); if (p.skin != null && (p.unlocked || []).indexOf(p.skin) >= 0) sk[0] = p.skin; st.set('skins', sk);
+        }
+        st.set('owins', p.owins | 0); st.set('olosses', p.olosses | 0);
+        return N.sync();
+      });
+    }
+  };
+})();

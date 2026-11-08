@@ -1,0 +1,1 @@
+{ "name": "silly-duel", "version": "1.0.0", "private": true, "description": "Silly Duel game + online server (no dependencies)", "scripts": { "start": "node server/server.js" }, "engines": { "node": ">=16" } }

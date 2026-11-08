@@ -1,0 +1,29 @@
+body[data-arena] .bgfx { background: var(--ar-bg); }
+body[data-arena] .bgfx::before { opacity: .18; }
+.arena-scene { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.arena-scene svg { width: 100%; height: 100%; display: block; }
+body[data-arena] #pads { z-index: 1; }
+body[data-arena] .pad { background-color: color-mix(in srgb, var(--pc) 46%, transparent); }
+body[data-arena="disco"] .pad, body[data-arena="lava"] .pad, body[data-arena="neon"] .pad { background-color: color-mix(in srgb, var(--pc) 66%, transparent); }
+body[data-arena] .pad { box-shadow: 0 7px 0 var(--ink), 0 0 0 5px var(--ar-ac), 0 0 22px 6px var(--ar-ac); }
+.arena-fx { position: absolute; inset: 0; z-index: 6; pointer-events: none; overflow: hidden; }
+.arena-fx i { position: absolute; font-style: normal; line-height: 1; opacity: .85; text-shadow: 0 0 6px rgba(255,255,255,.6); }
+.arena-fx i.mv-up { bottom: -30px; animation: arUp linear infinite; }
+.arena-fx i.mv-down { top: -30px; animation: arDown linear infinite; }
+.arena-fx i.mv-sway { top: -30px; animation: arDown linear infinite, arSway 3s ease-in-out infinite alternate; }
+.arena-fx i.mv-twinkle { top: calc(10% + var(--t, 0%)); animation: arTwinkle ease-in-out infinite alternate; }
+.arena-fx i.mv-twinkle:nth-child(3n) { top: 30%; } .arena-fx i.mv-twinkle:nth-child(3n+1) { top: 60%; } .arena-fx i.mv-twinkle:nth-child(3n+2) { top: 85%; }
+@keyframes arUp { to { transform: translateY(-110vh) rotate(90deg); } }
+@keyframes arDown { to { transform: translateY(110vh) rotate(180deg); } }
+@keyframes arSway { from { margin-left: -14px; } to { margin-left: 14px; } }
+@keyframes arTwinkle { from { opacity: .15; transform: scale(.6); } to { opacity: 1; transform: scale(1.3); } }
+.arena-banner { position: absolute; left: 50%; top: 9%; transform: translate(-50%, -50%); z-index: 9; padding: 10px 20px; font-family: var(--font-p); font-weight: 700; font-size: 20px; text-align: center; background: var(--lemon); border: 4px solid var(--ink); border-radius: 18px; box-shadow: 0 5px 0 var(--ink); pointer-events: none; animation: arBan 2s ease forwards; }
+.arena-banner small { display: block; font-size: 11px; opacity: .7; }
+@keyframes arBan { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.6); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); } 80% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .arena-fx i { animation: none !important; } }
+/* arena picker */
+.ar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+.ar-card { position: relative; height: 84px; border: 3px solid var(--ink); border-radius: 14px; box-shadow: 0 3px 0 var(--ink); display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 4px; font-family: var(--font-p); font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 0 var(--ink), 1px 0 0 var(--ink), -1px 0 0 var(--ink), 0 -1px 0 var(--ink); overflow: hidden; }
+.ar-card.locked { filter: brightness(.35) blur(1.5px); }
+.ar-card.sel { outline: 4px solid var(--grape); outline-offset: 2px; }
+.ar-card small { font-size: 10px; }
