@@ -16,37 +16,92 @@
   function wsUrl() { return SD.serverUrl || ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'); }
   function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
   function busy(title, msg) { show('<h2>' + title + '</h2><div class="on-face spin">' + art.face(0, 'worry') + '</div><p class="on-msg">' + msg + '</p>'); }
-  function profile() { return { t: 'hello', name: st.name(0), level: SD.progress.info().level, skin: (st.get('skins') || [0])[0] }; }
+  /* one id per browser tab, so the server can give this player back their seat after a reconnect */
+  var SID = (function () {
+    var k = 'sd_sid', v = '';
+    try { v = sessionStorage.getItem(k) || ''; } catch (e) {}
+    if (!v) { v = Date.now().toString(36) + Math.random().toString(36).slice(2, 10); try { sessionStorage.setItem(k, v); } catch (e) {} }
+    return v;
+  })();
+  function profile() { return { t: 'hello', sid: SID, name: st.name(0), level: SD.progress.info().level, skin: (st.get('skins') || [0])[0] }; }
 
   /* ---------- connection ---------- */
+  var lastMsg = 0, retry = null, resuming = false;
   function connect() {
     return new Promise(function (res, rej) {
       if (ws && ws.readyState === 1) return res();
       var s, done = false, tm;
       try { s = new WebSocket(wsUrl()); } catch (e) { return rej(e); }
-      tm = setTimeout(function () { if (!done) { done = true; try { s.close(); } catch (e) {} rej(new Error('timeout')); } }, 8000);
-      s.onopen = function () { if (done) return; done = true; clearTimeout(tm); ws = s; s.send(JSON.stringify(profile())); res(); };
+      tm = setTimeout(function () { if (!done) { done = true; s.onclose = null; try { s.close(); } catch (e) {} rej(new Error('timeout')); } }, 8000);
+      s.onopen = function () { if (done) return; done = true; clearTimeout(tm); ws = s; lastMsg = Date.now(); s.send(JSON.stringify(profile())); res(); };
       s.onerror = function () { if (!done) { done = true; clearTimeout(tm); rej(new Error('fail')); } };
-      s.onmessage = function (ev) { var m; try { m = JSON.parse(ev.data); } catch (e) { return; } onMsg(m); };
-      s.onclose = function () { if (ws === s) { ws = null; V = null; if (curConn && curConn.peer.onclose) curConn.peer.onclose(); if (!inMatch && !root.hidden) lost(); } };
+      s.onmessage = function (ev) { lastMsg = Date.now(); var m; try { m = JSON.parse(ev.data); } catch (e) { return; } onMsg(m); };
+      s.onclose = function () { if (ws === s) dropped(); };
     });
   }
-  function lost() { show('<h2>DISCONNECTED</h2><div class="on-face">' + art.face(0, 'sad') + '</div><p class="on-msg">LOST THE SERVER</p><button class="gel" id="pOk" type="button"><span>OK</span></button>'); bind('#pOk', leave); }
+  /* the socket died (phone switched apps, network blip): in a match that ends the match, otherwise reconnect quietly */
+  function dropped() {
+    var sock = ws; ws = null; if (sock) { sock.onclose = null; try { sock.close(); } catch (e) {} }
+    if (inMatch || curConn) { V = null; if (curConn && curConn.peer.onclose) curConn.peer.onclose(); return; }
+    if (!root || root.hidden) { V = null; return; }
+    reconnect(Date.now());
+  }
+  function reconnect(t0) {
+    if (retry) return;
+    var hadRoom = !!V, wasQueued = queued, t = tok;
+    resuming = hadRoom;
+    if (!hadRoom && !wasQueued) busy('RECONNECTING', 'CONNECTING AGAIN...');
+    else if (hadRoom) { var n = card.querySelector('.on-note'); if (n) n.textContent = 'RECONNECTING...'; }
+    var attempt = function () {
+      retry = null;
+      if (t !== tok) return;
+      connect().then(function () {
+        if (t !== tok) return;
+        if (wasQueued) { send({ t: 'quick' }); renderQuickWait(0); }
+        else if (!hadRoom) menu();
+      }, function () {
+        if (t !== tok) return;
+        if (Date.now() - t0 > 4 * 60 * 1000) { V = null; lost(); return; }
+        retry = setTimeout(attempt, 2500);
+      });
+    };
+    attempt();
+  }
+  /* back from another app: check the socket is really alive, and reconnect at once if not */
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden || !root || root.hidden || inMatch) return;
+    if (retry) { clearTimeout(retry); retry = null; reconnect(Date.now()); return; }
+    if (!ws) return;
+    var sent = Date.now(); send({ t: 'ping' });
+    setTimeout(function () { if (ws && lastMsg < sent && !document.hidden) dropped(); }, 3000);
+  });
+  setInterval(function () { if (ws && !document.hidden) send({ t: 'ping' }); }, 25000);
+  /* the room this tab is in, so a page reload (phone dropped the tab in the background) can take the seat back */
+  function remember(code) { try { if (code) sessionStorage.setItem('sd_room', code); else sessionStorage.removeItem('sd_room'); } catch (e) {} }
+  P.resume = function () {
+    var code = ''; try { code = sessionStorage.getItem('sd_room') || ''; } catch (e) {}
+    if (!code) return false;
+    root = $('#party'); card = $('#partyCard'); open(); busy('FRIENDS ROOM', 'BACK TO ROOM ' + esc(code) + '...'); var t = tok;
+    resuming = true;
+    connect().then(function () {}, function () { if (t === tok) { resuming = false; noServer(); } });
+    return true;
+  };
+  function lost() { remember(''); show('<h2>DISCONNECTED</h2><div class="on-face">' + art.face(0, 'sad') + '</div><p class="on-msg">LOST THE SERVER</p><button class="gel" id="pOk" type="button"><span>OK</span></button>'); bind('#pOk', leave); }
   function noServer() {
     show('<h2>NO SERVER FOUND</h2><div class="on-face">' + art.face(0, 'sad') + '</div><p class="on-msg">COULD NOT REACH THE GAME SERVER<small>Online play needs the Silly Duel server. See SERVER-GUIDE.txt (local wifi or internet).</small></p>' + back('OK'));
     bind('#pBack', leave);
   }
   function open() { root.hidden = false; $('#home').hidden = true; tok++; V = null; }
-  function leave() { tok++; send({ t: 'quickCancel' }); send({ t: 'leave' }); V = null; queued = false; root.hidden = true; $('#home').hidden = false; if (SD.main && SD.main.refresh) SD.main.refresh(); }
+  function leave() { tok++; clearTimeout(retry); retry = null; resuming = false; remember(''); send({ t: 'quickCancel' }); send({ t: 'leave' }); V = null; queued = false; root.hidden = true; $('#home').hidden = false; if (SD.main && SD.main.refresh) SD.main.refresh(); }
 
   /* ---------- messages ---------- */
   function onMsg(m) {
-    if (m.t === 'hi') myId = m.id;
+    if (m.t === 'hi') { myId = m.id; if (resuming) { resuming = false; if (!m.resumed) { V = null; lost(); } } }
     else if (m.t === 'wait') { if (queued) renderQuickWait(m.n); }
     else if (m.t === 'err') { var e = $('#pErr'); if (e) e.textContent = m.e; else { show('<h2>PARTY</h2><p class="on-msg">' + esc(m.e) + '</p>' + back()); bind('#pBack', menu); } }
-    else if (m.t === 'room') { V = m.v; if (!inMatch) render(); }
-    else if (m.t === 'left') { V = null; }
-    else if (m.t === 'match') { pending = m; queued = false; if (!inMatch) launch(); }
+    else if (m.t === 'room') { V = m.v; remember(V.code); if (!inMatch) render(); }
+    else if (m.t === 'left') { V = null; remember(''); }
+    else if (m.t === 'match') { pending = m; queued = false; if (m.kind !== 'tour') remember(''); if (!inMatch) launch(); }
     else if (m.t === 'relay') { if (curConn && curConn.mid === m.mid) curConn.deliver(m.m); }
     else if (m.t === 'tap') { var el = card.querySelector('[data-mid="' + m.mid + '"] .tf[data-slot="' + m.slot + '"]'); if (el) { el.classList.remove('tap'); void el.offsetWidth; el.classList.add('tap'); } }
   }
@@ -110,9 +165,9 @@
   }
   function renderLobby() {
     var n = V.players.length, isHost = V.host === myId, okN = n >= 2 && n <= 10 && n % 2 === 0;
-    var list = V.players.map(function (p) { return '<div class="tl-p">' + face(p) + '<b>' + esc(p.name) + (p.id === V.host ? ' *' : '') + '</b></div>'; }).join('');
+    var list = V.players.map(function (p) { return '<div class="tl-p' + (p.away ? ' away' : '') + '">' + face(p) + '<b>' + esc(p.name) + (p.id === V.host ? ' *' : '') + '</b>' + (p.away ? '<small>AWAY</small>' : '') + '</div>'; }).join('');
     show('<h2>ROOM</h2><div class="t-code">' + esc(V.code) + '</div><p class="on-note">Friends: tap ROOM, JOIN WITH A CODE, and type this. Or send the invite link.</p>' +
-      '<div class="tl-list">' + list + '</div><p class="on-msg tl"><small>' + n + ' / 10 PLAYERS' + (okN ? '' : n < 2 ? ' · NEED ONE MORE' : ' · NEED AN EVEN NUMBER') + '</small></p>' +
+      '<div class="tl-list">' + list + '</div><p class="on-msg tl"><small>' + n + ' / 10 PLAYERS' + (okN ? '' : n < 2 ? ' · NEED ONE MORE' : ' · NEED AN EVEN NUMBER') + '</small></p><p class="on-err" id="pErr"></p>' +
       (isHost ? '<button class="gel" id="pStart" type="button"' + (okN ? '' : ' disabled') + '><span>START' + (n >= 2 ? ' (' + n + ')' : '') + '</span></button>' : '<p class="on-msg">WAITING FOR THE HOST TO START...</p>') +
       '<button class="gel alt" id="pInv" type="button"><span>SEND INVITE</span></button>' + back('LEAVE'));
     bind('#pStart', function () { send({ t: 'start' }); }); bind('#pInv', invite); bind('#pBack', leave);

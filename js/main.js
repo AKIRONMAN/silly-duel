@@ -280,6 +280,7 @@
     if (m && SD.lobby) SD.lobby.autoJoin(m[1].toUpperCase());
     var pm = /[?&]party=([A-Za-z]{4})/.exec(location.search);
     if (pm && SD.party) SD.party.join(pm[1].toUpperCase());
+    else if (!m && SD.party && SD.party.resume) SD.party.resume();
     document.addEventListener('visibilitychange', function () { au.setPaused(document.hidden); });
   }
   init();

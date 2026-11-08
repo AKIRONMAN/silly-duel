@@ -4,6 +4,8 @@
 .tl-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; max-height: 190px; overflow: hidden; }
 .tl-p { display: flex; flex-direction: column; align-items: center; width: 70px; font-family: var(--font-p); font-size: 10px; }
 .tl-p b { max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-p.away .tf { opacity: .45; filter: grayscale(.7); }
+.tl-p small { font-size: 8px; opacity: .7; }
 .tf { display: block; width: 46px; }
 .tf svg { width: 100%; height: auto; display: block; overflow: visible; }
 .tf.tap { animation: tfTap .28s ease-out; }

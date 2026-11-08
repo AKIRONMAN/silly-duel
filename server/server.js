@@ -55,7 +55,8 @@ server.on('upgrade', function (req, socket) {
 });
 
 /* ---------- game logic ---------- */
-var nextId = 1, nextMid = 1, clients = {}, rooms = {}, queue = [], matches = {};
+var nextId = 1, nextMid = 1, clients = {}, rooms = {}, queue = [], matches = {}, bySid = {};
+var GRACE = 5 * 60 * 1000;   // a player in a room who switches apps (e.g. to send the invite) keeps their place this long
 function rnd() { return (Math.random() * 4294967296) >>> 0; }
 function clean(s, n) { return String(s == null ? '' : s).replace(/[<>&"]/g, '').slice(0, n); }
 function info(c) { return { name: c.name, level: c.level, skin: c.skin }; }
@@ -76,7 +77,7 @@ function dropMatch(m) { if (!m) return; delete matches[m.mid]; [m.a, m.b].forEac
 /* party rooms */
 function pubRoom(r) {
   return { code: r.code, phase: r.phase, round: r.round, rounds: r.rounds, host: r.host, champ: r.champ, size: r.size,
-    players: r.players.map(function (id) { var c = clients[id]; return c ? { id: id, name: c.name, level: c.level, skin: c.skin, out: !!r.out[id] } : null; }).filter(Boolean),
+    players: r.players.map(function (id) { var c = clients[id]; return c ? { id: id, name: c.name, level: c.level, skin: c.skin, out: !!r.out[id], away: !c.ws } : null; }).filter(Boolean),
     matches: r.matches.map(function (m) { return { mid: m.mid, a: m.a, b: m.b, w: m.w, s: m.s, g: m.g, bye: !!m.bye, ra: !!m.ra, rb: !!m.rb, live: !!m.live, n: m.n }; }) };
 }
 function bcast(r) { var v = pubRoom(r); r.players.forEach(function (id) { var c = clients[id]; if (c) c.send({ t: 'room', v: v }); }); }
@@ -120,24 +121,49 @@ function finish(r, m, winId) {
 }
 function tryStart(r, m) {
   if (!m.ra || !m.rb || m.live || m.done) return;
-  var a = clients[m.a], b = clients[m.b]; if (!a || !b) return;
+  var a = clients[m.a], b = clients[m.b]; if (!a || !b || !a.ws || !b.ws) return;
   m.live = true;
   var mt = startMatch(a, b, 'tour', { room: r.code });
   var old = m.mid; m.mid = mt.mid; mt.rm = true; mt.rcode = r.code; bcast(r);
 }
 
+function newClient() {
+  var c = { id: nextId++, ws: null, sid: '', graceT: null, name: 'PLAYER', level: 1, skin: 0, room: null, match: 0, q: false, t0: Date.now(), msgs: 0 };
+  c.send = function (o) { if (c.ws) c.ws.send(o); };
+  clients[c.id] = c; return c;
+}
+function forget(c) {
+  clearTimeout(c.graceT); dequeue(c); var mt = matches[c.match];
+  if (mt) { var o = clients[mt.a === c.id ? mt.b : mt.a]; if (o) o.send({ t: 'relay', mid: mt.mid, m: { t: 'bye' } }); if (mt.rm) { var r0 = rooms[mt.rcode]; if (r0) { leaveRoom(c); } } dropMatch(mt); }
+  leaveRoom(c); delete clients[c.id]; if (c.sid && bySid[c.sid] === c) delete bySid[c.sid];
+}
 function connect(ws) {
-  var c = { id: nextId++, ws: ws, name: 'PLAYER', level: 1, skin: 0, room: null, match: 0, q: false, send: function (o) { ws.send(o); }, t0: Date.now(), msgs: 0 };
-  clients[c.id] = c; c.send({ t: 'hi', id: c.id });
+  var c = newClient(); c.ws = ws;
   ws.onclose = function () {
-    dequeue(c); var mt = matches[c.match];
-    if (mt) { var o = clients[mt.a === c.id ? mt.b : mt.a]; if (o) o.send({ t: 'relay', mid: mt.mid, m: { t: 'bye' } }); if (mt.rm) { var r0 = rooms[mt.rcode]; if (r0) { leaveRoom(c); } } dropMatch(mt); }
-    leaveRoom(c); delete clients[c.id];
+    if (c.ws !== ws) return;                               // this socket was replaced by a reconnect
+    c.ws = null; dequeue(c);
+    if (c.room && !c.match) { var r = rooms[c.room]; c.graceT = setTimeout(function () { forget(c); }, GRACE); if (r) bcast(r); }
+    else forget(c);
   };
   var bucket = 60, lastRef = Date.now();
   ws.onmessage = function (txt) {
     var now = Date.now(); bucket = Math.min(200, bucket + (now - lastRef) * 0.12); lastRef = now; if (bucket < 1) return; bucket -= 1;
     var m; try { m = JSON.parse(txt); } catch (e) { return; } if (!m || typeof m.t !== 'string') return;
+    if (m.t === 'hello') {
+      var sid = clean(m.sid, 40), old = sid && bySid[sid];
+      if (old && old !== c && clients[old.id] && old.room && !old.match) {          // same player coming back: take over the old seat
+        var prev = old.ws; old.ws = ws; clearTimeout(old.graceT); old.graceT = null;
+        if (prev) { prev.onclose = null; try { prev.s.destroy(); } catch (e) {} }
+        delete clients[c.id]; c = old;
+        handle(c, m); c.send({ t: 'hi', id: c.id, resumed: true });
+        var r2 = rooms[c.room]; if (r2) { bcast(r2); if (r2.phase === 'tree') r2.matches.forEach(function (x) { tryStart(r2, x); }); }
+        return;
+      }
+      if (old && old !== c) forget(old);
+      if (sid) { c.sid = sid; bySid[sid] = c; }
+      handle(c, m); c.send({ t: 'hi', id: c.id, resumed: false });
+      return;
+    }
     handle(c, m);
   };
 }
@@ -166,6 +192,8 @@ function handle(c, m) {
     case 'start': {
       var r3 = rooms[c.room]; if (!r3 || r3.host !== c.id || r3.phase !== 'lobby') return;
       var n = r3.players.length; if (n < 2 || n > 10 || n % 2) return c.send({ t: 'err', e: 'NEEDS AN EVEN NUMBER OF PLAYERS (2, 4, 6, 8, 10)' });
+      var away = r3.players.filter(function (id) { return clients[id] && !clients[id].ws; })[0];
+      if (away) return c.send({ t: 'err', e: 'WAITING FOR ' + clients[away].name + ' TO COME BACK' });
       r3.size = n;
       if (n === 2) { var a = clients[r3.players[0]], b = clients[r3.players[1]]; delete rooms[r3.code]; a.room = b.room = null; startMatch(a, b, 'room'); return; }
       r3.phase = 'tree'; r3.out = {}; r3.round = 0; r3.rounds = Math.ceil(Math.log2(n)); buildRound(r3); break; }
