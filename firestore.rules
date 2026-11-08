@@ -9,13 +9,22 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == uid
         && request.resource.data.name is string && request.resource.data.name.size() <= 14
         && request.resource.data.level is int && request.resource.data.level >= 1 && request.resource.data.level <= 200
-        && request.resource.data.owins is int && request.resource.data.owins >= 0 && request.resource.data.owins <= 5;
+        && request.resource.data.owins is int && request.resource.data.owins >= 0 && request.resource.data.owins <= 500;
       allow update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.name is string && request.resource.data.name.size() <= 14
         && request.resource.data.level is int && request.resource.data.level >= 1 && request.resource.data.level <= 200
         && request.resource.data.owins is int && request.resource.data.owins >= 0
         && request.resource.data.owins - resource.data.owins <= 5;
-      allow delete: if false;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Full private save of a signed-in player (level, coins, skins, power-ups, rooms, settings).
+    // Only the owner can read, write or delete it.
+    match /saves/{uid} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.d is string && request.resource.data.d.size() < 60000
+        && request.resource.data.ts is int;
     }
 
     // People waiting for a quick match. Only the owner writes their own entry.

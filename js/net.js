@@ -40,7 +40,7 @@ window.SD = window.SD || {};
   function me() {
     var u = FB && FB.auth.currentUser;
     if (!u) return null;
-    return { uid: u.uid, name: u.isAnonymous ? st.name(0) : (u.displayName || st.name(0)), anon: u.isAnonymous };
+    return { uid: u.uid, name: st.name(0), anon: u.isAnonymous, email: u.email || '' };
   }
   function ref(path) { var p = path.split('/'); return FB.f.doc.apply(null, [FB.db].concat(p)); }
   function coll(path) { return FB.f.collection.apply(null, [FB.db].concat(path.split('/'))); }
@@ -53,24 +53,31 @@ window.SD = window.SD || {};
         .then(me);
     },
     user: me,
-    google: function () {
-      var prov = new FB.a.GoogleAuthProvider(), cu = FB.auth.currentUser;
-      var p = cu && cu.isAnonymous
-        ? FB.a.linkWithPopup(cu, prov).catch(function (e) {
-            if (/credential-already-in-use/.test((e && e.code) || '')) { var cr = FB.a.GoogleAuthProvider.credentialFromError(e); if (cr) return FB.a.signInWithCredential(FB.auth, cr); }
-            throw e;
-          })
-        : FB.a.signInWithPopup(FB.auth, prov);
-      return p.then(function () {
-        var u = FB.auth.currentUser;
-        return fb.loadProfile().catch(function () { return null; }).then(function (prof) {
-          var first = String(u.displayName || '').split(' ')[0].replace(/[^A-Za-z0-9_]/g, '').toUpperCase().slice(0, 12);
-          var name = (prof && prof.name) || (first.length >= 3 ? first : st.name(0));
-          return FB.a.updateProfile(u, { displayName: name });
-        });
-      }).then(me);
+    /* load Firebase and restore a remembered login, without creating a guest account */
+    start: function () {
+      return load().then(function () { return FB.auth.authStateReady ? FB.auth.authStateReady() : null; }).then(me);
     },
-    logout: function () { return FB.a.signOut(FB.auth).then(function () { return FB.a.signInAnonymously(FB.auth); }).then(me); },
+    google: function () {
+      var prov = new FB.a.GoogleAuthProvider();
+      prov.setCustomParameters({ prompt: 'select_account' });
+      return FB.a.signInWithPopup(FB.auth, prov).then(me);
+    },
+    logout: function () { return FB.a.signOut(FB.auth); },
+    /* private full save (only the owner can read it) */
+    loadSave: function () { return FB.f.getDoc(ref('saves/' + FB.auth.currentUser.uid)).then(function (s) { return s.exists() ? s.data() : null; }); },
+    putSave: function (text, ts) { return FB.f.setDoc(ref('saves/' + FB.auth.currentUser.uid), { d: text, ts: ts }); },
+    /* removes the save, the Top 100 entry and the Google login itself */
+    deleteAccount: function () {
+      var u = FB.auth.currentUser, uid = u.uid;
+      function wipe() { return Promise.all([FB.f.deleteDoc(ref('saves/' + uid)), FB.f.deleteDoc(ref('users/' + uid))]); }
+      function drop() {
+        return u.delete().catch(function (e) {
+          if (!/requires-recent-login/.test((e && e.code) || '')) throw e;
+          return FB.a.reauthenticateWithPopup(u, new FB.a.GoogleAuthProvider()).then(function () { return u.delete(); });
+        });
+      }
+      return wipe().then(drop);
+    },
     saveProfile: function (p) { return FB.f.setDoc(ref('users/' + FB.auth.currentUser.uid), p, { merge: true }); },
     loadProfile: function () { return FB.f.getDoc(ref('users/' + FB.auth.currentUser.uid)).then(function (s) { return s.exists() ? s.data() : null; }); },
     leaderboard: function () {
@@ -339,28 +346,61 @@ window.SD = window.SD || {};
       }).then(function (c) { c.kind = 'room'; return c; });
     },
 
-    /* keep my profile in the cloud: leaderboard, and progress follows my login */
-    sync: function () {
-      if (!configured() || !FB || !FB.auth.currentUser) return Promise.resolve();
-      var m = me();
-      return N.backend.saveProfile({
-        name: m.name, level: st.get('level') | 0, xp: st.get('xp') | 0, unlocked: st.get('unlocked'), skin: st.get('skins')[0] | 0,
-        owins: st.get('owins') | 0, olosses: st.get('olosses') | 0, ts: Date.now()
-      }).catch(function () {});
+    /* ---------- Google account: the whole save follows the login ---------- */
+    signedIn: signedIn,
+    status: function () { return syncState; },
+    /* on page load: restore a remembered login and bring the newest save onto this phone */
+    boot: function () {
+      if (!configured() || !st.get('acct')) return Promise.resolve(false);
+      return fb.start().then(function (u) {
+        if (!u || u.anon || u.uid !== st.get('acct')) { st.quiet('acct', ''); return false; }
+        return pull(false);
+      }).catch(function () { return false; });
     },
-    /* after login: take the cloud progress if it is further than this device */
-    adopt: function () {
-      return N.backend.loadProfile().then(function (p) {
-        if (!p) return N.sync();
-        var cloud = (p.level | 0) * 100000 + (p.xp | 0), local = (st.get('level') | 0) * 100000 + (st.get('xp') | 0);
-        if (cloud > local) {
-          st.set('level', p.level | 0); st.set('xp', p.xp | 0);
-          if (Array.isArray(p.unlocked)) st.set('unlocked', p.unlocked);
-          var sk = st.get('skins').slice(); if (p.skin != null && (p.unlocked || []).indexOf(p.skin) >= 0) sk[0] = p.skin; st.set('skins', sk);
-        }
-        st.set('owins', p.owins | 0); st.set('olosses', p.olosses | 0);
-        return N.sync();
+    signIn: function () {
+      var popup = FB ? fb.google() : fb.start().then(fb.google);   // open the popup straight from the tap when Firebase is ready, or Safari blocks it
+      return popup.then(function (u) {
+        if (st.get('acct') !== u.uid) st.quiet('cloudTs', 0);
+        st.quiet('acct', u.uid);
+        return pull(true);
       });
+    },
+    /* save now (TOP 100 entry + private save). Safe to call any time. */
+    sync: function () {
+      clearTimeout(syncTimer); syncTimer = 0;
+      if (!signedIn()) return Promise.resolve();
+      var ts = Date.now(), lv = Math.max(1, Math.min(200, st.get('level') | 0));
+      syncState = 'saving';
+      return Promise.all([
+        fb.putSave(st.dump(), ts),
+        fb.saveProfile({ name: st.name(0).slice(0, 14), level: lv, skin: st.get('skins')[0] | 0, owins: st.get('owins') | 0, ts: ts })
+      ]).then(function () { st.quiet('cloudTs', ts); syncState = 'saved'; }, function () { syncState = 'error'; });
+    },
+    logout: function () {
+      return N.sync().then(fb.logout).then(function () { st.quiet('acct', ''); st.quiet('cloudTs', 0); st.reset(); });
+    },
+    deleteAccount: function () {
+      clearTimeout(syncTimer); syncTimer = 0;
+      return fb.deleteAccount().then(function () { st.quiet('acct', ''); st.quiet('cloudTs', 0); st.reset(); });
     }
   };
+
+  var syncTimer = 0, syncState = 'saved';
+  function signedIn() { var u = FB && FB.auth.currentUser; return !!(u && !u.isAnonymous && u.uid === st.get('acct')); }
+  /* newest copy wins: the cloud save if it changed since this phone last saved, otherwise this phone.
+     First sign-in: an existing account save replaces the phone, a new account keeps the guest progress. */
+  function pull(first) {
+    return fb.loadSave().then(function (s) {
+      var cloudNewer = s && typeof s.d === 'string' && (first || (s.ts | 0) > (st.get('cloudTs') | 0));
+      if (cloudNewer && st.load(s.d)) { st.quiet('cloudTs', s.ts | 0); syncState = 'saved'; return N.sync().then(function () { return true; }); }
+      return N.sync().then(function () { return false; });
+    });
+  }
+  st.onChange(function () {
+    if (!signedIn()) return;
+    syncState = 'saving';
+    clearTimeout(syncTimer); syncTimer = setTimeout(N.sync, 2500);
+  });
+  window.addEventListener('pagehide', function () { if (syncTimer) N.sync(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden && syncTimer) N.sync(); });
 })();

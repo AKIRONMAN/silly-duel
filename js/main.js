@@ -200,9 +200,9 @@
     wdSlot = slot; wdSel = art.slotSkin(slot);
     $('#wardrobe').hidden = false;
     $('#wdTitle').textContent = slot === 0 ? 'PLAYER 1 LOOK' : 'PLAYER 2 LOOK';
-    var ni = $('#wdNameIn'), locked = slot === 0 && !!st.get('acct');
-    ni.value = st.name(slot); ni.readOnly = locked;
-    $('#wdNameNote').textContent = locked ? 'Your name comes from your login.' : slot === 0 ? 'Tap the name to change it. This is shown online too.' : '';
+    var ni = $('#wdNameIn');
+    ni.value = st.name(slot); ni.readOnly = false;
+    $('#wdNameNote').textContent = slot === 0 ? 'Tap the name to change it. This is shown online and on the TOP 100.' : '';
     paintWardrobe();
     var k = 0;
     clearInterval(wdTimer);
@@ -272,6 +272,7 @@
     $('#btnSettings').addEventListener('click', function () { au.sfx.select(); openSettings(); });
     $('#stDone').addEventListener('click', function () { au.sfx.tap(); $('#settings').hidden = true; }); 
     SD.engine.home();
+    if (!CG && SD.net) SD.net.boot().then(function (loaded) { if (loaded) { refresh(); au.music.refresh(); } });
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
       navigator.serviceWorker.register('sw.js').catch(function () {});
     }

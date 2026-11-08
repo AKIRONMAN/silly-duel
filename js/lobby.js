@@ -11,15 +11,63 @@
   function bind(sel, fn) { var e = card.querySelector(sel); if (e) e.addEventListener('click', function () { au.sfx.tap(); fn(e); }); }
   function back() { return '<button class="gel alt on-back" id="onBack" type="button">' + art.icon('close', 22) + '<span>BACK</span></button>'; }
 
+  /* ---------- account: Google sign in, log out, delete ---------- */
+  var GLOGO = '<svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 2.9-2.2 5.4-4.7 7.1l7.6 5.9c4.4-4.1 6.9-10.1 6.9-17.5z"/><path fill="#FBBC05" d="M10.6 28.5c-.5-1.4-.8-2.9-.8-4.5s.3-3.1.8-4.5l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.2 0-11.5-4.2-13.4-9.9l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>';
+  var PRIVACY = '<p class="on-note">We save only your game name, level, coins and items. Your email is never shown. No ads tracking.</p>';
+  function gBtn() { return '<button class="gel google" id="onGoogle" type="button">' + GLOGO + '<span>SIGN IN WITH GOOGLE</span></button>'; }
+  function meRow(sub) {
+    var i = SD.progress.info();
+    return '<div class="on-me"><div class="on-face sm">' + art.face(0, 'idle') + '</div><div><b>' + esc(st.name(0)) + '</b><small>LV ' + i.level + ' · ' + (st.get('coins') | 0) + ' COINS · ' + (st.get('owins') | 0) + ' WINS</small><small>' + sub + '</small></div></div>';
+  }
+  /* Google sign in from any screen; then = what to show afterwards */
+  function signIn(then) {
+    var err = $('#onErr'); if (err) err.textContent = 'OPENING GOOGLE...';
+    N().signIn().then(function (loaded) {
+      au.sfx.tada(); SD.main.refresh(); if (au.music.refresh) au.music.refresh();
+      then(loaded ? 'WELCOME BACK! YOUR SAVE IS LOADED.' : 'SIGNED IN. YOUR PROGRESS IS SAVED.');
+    }, function (e) { var x = $('#onErr'); if (x) x.textContent = N().nice(e); au.sfx.bwoop(); });
+  }
   function open() {
     root.hidden = false; token++; entryBack = null;
     if (!N().configured()) return localMenu();
-    show('<h2>ONLINE</h2><div class="on-face">' + art.face(0, 'idle') + '</div><p class="on-msg">CONNECTING...</p>');
+    show('<h2>ACCOUNT</h2><p class="on-msg">LOADING...</p>');
     var t = token;
-    N().backend.init().then(function () { if (t === token) menu(); }, function (e) {
+    N().backend.start().then(function () { if (t === token) account(''); }, function (e) {
       if (t !== token) return;
-      show('<h2>ONLINE</h2><div class="on-face">' + art.face(0, 'sad') + '</div><p class="on-msg">' + N().nice(e) + '<small>Check internet and the Firebase setup.</small></p><button class="gel" id="onRetry" type="button">TRY AGAIN</button>' + back());
+      show('<h2>ACCOUNT</h2><div class="on-face">' + art.face(0, 'sad') + '</div><p class="on-msg">' + N().nice(e) + '<small>Check your internet.</small></p><button class="gel" id="onRetry" type="button">TRY AGAIN</button>' + back());
       bind('#onRetry', open); bind('#onBack', close);
+    });
+  }
+  function account(msg) {
+    if (!N().signedIn()) {
+      show('<h2>SAVE MY GAME</h2>' + meRow('GUEST · SAVED ON THIS PHONE ONLY') +
+        '<p class="on-msg">SIGN IN TO KEEP YOUR PROGRESS<small>Play on any phone with the same level, coins, skins and power-ups, and join the TOP 100.</small></p>' +
+        gBtn() + '<p class="on-err" id="onErr">' + esc(msg) + '</p>' + PRIVACY + back());
+      bind('#onGoogle', function () { signIn(account); }); bind('#onBack', close);
+      return;
+    }
+    var u = N().backend.user(), s = N().status();
+    show('<h2>ACCOUNT</h2>' + meRow('SIGNED IN · ' + (s === 'error' ? 'NOT SAVED, CHECK INTERNET' : s === 'saving' ? 'SAVING...' : 'SAVED ✓')) +
+      (u.email ? '<p class="on-note">Google: ' + esc(u.email) + '</p>' : '') +
+      '<p class="on-err" id="onErr">' + esc(msg) + '</p>' +
+      '<button class="gel alt" id="onOut" type="button"><span>LOG OUT</span></button>' +
+      '<button class="gel alt on-danger" id="onDel" type="button"><span>DELETE ACCOUNT</span></button>' + back());
+    bind('#onOut', function () {
+      show('<h2>ACCOUNT</h2><p class="on-msg">SAVING AND LOGGING OUT...</p>');
+      N().logout().then(function () { location.reload(); }, function (e) { account(N().nice(e)); });
+    });
+    bind('#onDel', confirmDelete); bind('#onBack', close);
+  }
+  function confirmDelete() {
+    show('<h2>DELETE ACCOUNT?</h2><div class="on-face">' + art.face(0, 'worry') + '</div>' +
+      '<p class="on-msg">THIS CANNOT BE UNDONE<small>Your saved level, coins, skins, power-ups and your TOP 100 entry are removed for good. This phone starts again as a new guest.</small></p>' +
+      '<p class="on-err" id="onErr"></p>' +
+      '<button class="gel on-danger" id="onYes" type="button"><span>YES, DELETE</span></button>' +
+      '<button class="gel alt" id="onNo" type="button"><span>CANCEL</span></button>');
+    bind('#onNo', function () { account(''); });
+    bind('#onYes', function () {
+      $('#onErr').textContent = 'DELETING...';
+      N().deleteAccount().then(function () { location.reload(); }, function (e) { var x = $('#onErr'); if (x) x.textContent = N().nice(e); au.sfx.bwoop(); });
     });
   }
   /* no Firebase yet: friend rooms still work (free public broker). Quick match, login and leaderboard need Firebase. */
@@ -31,7 +79,7 @@
       '<p class="on-note">Make a room, then send the code or invite link to your friend. Quick match, login and the leaderboard switch on when Firebase is added (see README).</p>' + back());
     bind('#onMake', makeRoom); bind('#onJoin', joinForm); bind('#onParty', function () { SD.party.menu(); }); bind('#onBack', close);
   }
-  function menuBack() { if (entryBack) entryBack(); else if (N().configured()) menu(); else localMenu(); }
+  function menuBack() { if (entryBack) entryBack(); else if (N().configured() && N().backend.user()) menu(); else if (N().configured()) close(); else localMenu(); }
   function invite(code) {
     var url = location.href.split('#')[0].split('?')[0] + '?room=' + code, text = 'Join my Silly Duel room! Code: ' + code;
     if (navigator.share) { navigator.share({ title: 'Silly Duel', text: text, url: url }).catch(function () {}); return; }
@@ -89,22 +137,7 @@
       '<div class="on-row"><button class="gel alt" id="onBoard" type="button">' + art.icon('trophy', 24) + '<span>TOP 100</span></button>' +
       (u.anon ? '<button class="gel alt" id="onAuth" type="button"><span>SIGN IN WITH GOOGLE</span></button>' : '<button class="gel alt" id="onOut" type="button"><span>LOG OUT</span></button>') + '</div>' + back());
     bind('#onQuick', quick); bind('#onMake', makeRoom); bind('#onJoin', joinForm); bind('#onParty', function () { SD.party.menu(); }); bind('#onBoard', function () { boardHome = false; board(); }); bind('#onBack', close);
-    bind('#onAuth', function () { authForm(''); });
-    bind('#onOut', function () { show('<h2>ONLINE</h2><p class="on-msg">LOGGING OUT...</p>'); st.set('acct', ''); N().backend.logout().then(menu, menu); });
-  }
-
-  /* ---------- Google sign in ---------- */
-  function authForm(msg) {
-    show('<h2>SAVE MY GAME</h2><div class="on-face">' + art.face(0, 'cheer') + '</div>' +
-      '<p class="on-note">Sign in with Google to keep your level, skins and wins, and to appear on the Top 100.</p>' +
-      '<button class="gel google" id="onGoogle" type="button"><span>SIGN IN WITH GOOGLE</span></button>' +
-      '<p class="on-err" id="onErr">' + esc(msg || '') + '</p>' + back());
-    bind('#onGoogle', function () {
-      $('#onErr').textContent = 'OPENING GOOGLE...';
-      N().backend.google().then(function (u) { st.set('acct', u.name); st.setName(0, u.name); return N().adopt(); })
-        .then(function () { au.sfx.tada(); menu(); }, function (e) { $('#onErr').textContent = N().nice(e); au.sfx.bwoop(); });
-    });
-    bind('#onBack', menu);
+    bind('#onAuth', open); bind('#onOut', open);
   }
 
   /* ---------- matchmaking ---------- */
@@ -156,12 +189,12 @@
     }
     show('<h2>TOP 100</h2><p class="on-msg">LOADING...</p>' + back());
     var t = token;
-    N().backend.init().then(function () { if (t === token) board(); }, function (e) {
+    N().backend.start().then(function () { if (t === token) board(); }, function (e) {
       if (t !== token) return;
       show('<h2>TOP 100</h2><p class="on-msg">' + N().nice(e) + '</p>' + back()); bind('#onBack', close);
     });
   }
-  function boardBack() { if (boardHome) { boardHome = false; close(); } else menu(); }
+  function boardBack() { if (boardHome) { boardHome = false; close(); } else menuBack(); }
   function board() {
     show('<h2>TOP 100</h2><p class="on-msg">LOADING...</p>' + back());
     bind('#onBack', boardBack);
@@ -169,11 +202,14 @@
     N().backend.leaderboard().then(function (rows) {
       if (t !== token) return;
       rows = rows.filter(function (r) { return (r.owins | 0) > 0; });
-      var me = N().backend.user();
+      var me = N().backend.user(), inn = N().signedIn();
       var list = rows.length ? rows.map(function (r, k) {
         return '<li class="' + (me && r.uid === me.uid ? 'me' : '') + '"><b>' + (k + 1) + '</b><span class="lb-face">' + art.face(0, 'idle', { skin: (r.skin | 0) }) + '</span><span class="lb-name">' + esc(r.name || '?') + '</span><span class="lb-lv">LV ' + (r.level | 0) + '</span><em>' + (r.owins | 0) + '</em></li>';
       }).join('') : '<li class="empty">NO WINS YET. BE THE FIRST!</li>';
-      show('<h2>TOP 100</h2><p class="on-note">Online wins</p><ol class="lb">' + list + '</ol>' + back());
+      var join = inn ? '<p class="on-note">Win MATCH games to climb. Room games do not count.</p>'
+        : '<p class="on-note">Sign in to save your progress and get on the TOP 100.</p>' + gBtn() + '<p class="on-err" id="onErr"></p>';
+      show('<h2>TOP 100</h2><p class="on-note">Online wins</p><ol class="lb' + (inn ? '' : ' short') + '">' + list + '</ol>' + join + back());
+      bind('#onGoogle', function () { signIn(function () { board(); }); });
       bind('#onBack', boardBack);
     }, function (e) { if (t === token) { show('<h2>TOP 100</h2><p class="on-msg">' + N().nice(e) + '</p>' + back()); bind('#onBack', boardBack); } });
   }
