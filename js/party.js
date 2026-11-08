@@ -92,7 +92,7 @@
     connect().then(function () { if (t === tok) menu(); }, function () { if (t === tok) noServer(); });
   };
   function joinForm(pre) {
-    show('<h2>JOIN A ROOM</h2><input id="pCode" class="on-code" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="CODE" value="' + esc(pre) + '"><p class="on-err" id="pErr"></p><button class="gel" id="pGo" type="button"><span>JOIN</span></button>' + back());
+    show('<h2>JOIN A ROOM</h2><input id="pCode" class="on-in code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" value="' + esc(pre) + '"><p class="on-err" id="pErr"></p><button class="gel" id="pGo" type="button"><span>JOIN</span></button>' + back());
     var go = function () { var c = ($('#pCode').value || '').toUpperCase().replace(/[^A-Z]/g, ''); if (c.length !== 4) { $('#pErr').textContent = 'TYPE THE 4 LETTERS'; return; } send({ t: 'join', code: c }); };
     bind('#pGo', go); bind('#pBack', menu);
     if (pre && pre.length === 4) go();
