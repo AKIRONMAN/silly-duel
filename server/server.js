@@ -65,8 +65,9 @@ function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floo
 function arenaLevel(a, b) { return Math.max(a.level, b.level); }
 
 function startMatch(a, b, kind, extra) {
-  var m = { mid: nextMid++, a: a.id, b: b.id, kind: kind, done: false, s: [0, 0], g: '' }, seed = rnd(), al = arenaLevel(a, b);
+  var m = { mid: nextMid++, a: a.id, b: b.id, kind: kind, done: false, s: [0, 0], g: '', seed: 0, arena: 0, snap: null }, seed = rnd(), al = arenaLevel(a, b);
   for (var k in extra || {}) m[k] = extra[k];
+  m.seed = seed; m.arena = al;
   matches[m.mid] = m; a.match = b.match = m.mid;
   a.send({ t: 'match', mid: m.mid, kind: kind, role: 'host', seed: seed, opp: info(b), arena: al, total: kind === 'tour' ? 3 : 0, room: m.room || '' });
   b.send({ t: 'match', mid: m.mid, kind: kind, role: 'guest', seed: seed, opp: info(a), arena: al, total: kind === 'tour' ? 3 : 0, room: m.room || '' });
@@ -213,8 +214,31 @@ function handle(c, m) {
     case 'relay': {
       var mt = matches[m.mid]; if (!mt || (mt.a !== c.id && mt.b !== c.id)) return; var oc = clients[mt.a === c.id ? mt.b : mt.a];
       if (oc) oc.send({ t: 'relay', mid: mt.mid, m: m.m });
-      if (m.m && (m.m.t === 'd' || m.m.t === 'u') && mt.rm) { var r5 = rooms[mt.rcode]; if (r5) r5.players.forEach(function (id) { if (id !== mt.a && id !== mt.b && clients[id]) clients[id].send({ t: 'tap', mid: mt.mid, slot: mt.a === c.id ? 0 : 1 }); }); }
+      if (mt.rm) {
+        var r5 = rooms[mt.rcode], slot = mt.a === c.id ? 0 : 1;
+        if (r5) r5.players.forEach(function (id) {
+          if (id === mt.a || id === mt.b || !clients[id]) return;
+          clients[id].send({ t: 'spec', mid: mt.mid, slot: slot, m: m.m });
+        });
+      }
       if (m.m && m.m.t === 'bye' && !mt.rm) dropMatch(mt);
+      break; }
+    case 'snap': {
+      var mtS = matches[m.mid]; if (!mtS || !mtS.rm || mtS.a !== c.id) return;
+      mtS.snap = m.snap || null;
+      if (m.snap && typeof m.snap.title === 'string') mtS.g = clean(m.snap.title, 20);
+      var rS = rooms[mtS.rcode];
+      if (rS) rS.players.forEach(function (id) {
+        if (id === mtS.a || id === mtS.b || !clients[id]) return;
+        clients[id].send({ t: 'snap', mid: mtS.mid, snap: mtS.snap });
+      });
+      break; }
+    case 'watch': {
+      var mtW = matches[m.mid], rW = mtW && mtW.rm && rooms[mtW.rcode];
+      if (!mtW || !rW || rW.players.indexOf(c.id) < 0 || c.id === mtW.a || c.id === mtW.b) return c.send({ t: 'watch', mid: m.mid | 0, ok: false });
+      var ca = clients[mtW.a], cb = clients[mtW.b];
+      c.send({ t: 'watch', mid: mtW.mid, ok: true, seed: mtW.seed, arena: mtW.arena, snap: mtW.snap || null,
+        a: ca ? info(ca) : null, b: cb ? info(cb) : null, s: mtW.s || [0, 0] });
       break; }
     case 'score': {
       var mt2 = matches[m.mid]; if (!mt2 || !mt2.rm || (mt2.a !== c.id && mt2.b !== c.id)) return; var r6 = rooms[mt2.rcode]; if (!r6) return;

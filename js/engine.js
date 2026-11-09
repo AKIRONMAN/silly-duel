@@ -74,7 +74,7 @@ SD.games = SD.games || [];
   function askLeave() {                                 // EXIT asks first, so a slip does not end the match
     if (!S || document.getElementById('leaveBox')) return;
     var d = document.createElement('div'); d.id = 'leaveBox';
-    d.innerHTML = '<div class="lv-card"><h2>LEAVE THE MATCH?</h2><p>' + (S.online ? 'Your rival will win.' : 'This match will end.') + '</p><div class="lv-row"><button type="button" class="pk-btn go" id="lvStay">STAY</button><button type="button" class="pk-btn leave" id="lvGo">LEAVE</button></div></div>';
+    d.innerHTML = '<div class="lv-card"><h2>' + (S.spec ? 'STOP WATCHING?' : 'LEAVE THE MATCH?') + '</h2><p>' + (S.spec ? 'The match keeps going without you.' : S.online ? 'Your rival will win.' : 'This match will end.') + '</p><div class="lv-row"><button type="button" class="pk-btn go" id="lvStay">STAY</button><button type="button" class="pk-btn leave" id="lvGo">LEAVE</button></div></div>';
     document.body.appendChild(d);
     d.querySelector('#lvStay').addEventListener('click', function () { au.sfx.tap(); d.remove(); });
     d.querySelector('#lvGo').addEventListener('click', function () { d.remove(); E.home(); });
@@ -82,12 +82,14 @@ SD.games = SD.games || [];
 
   /* my side is always BLUE, the rival (player two offline, the other person online) is always PINK */
   function colorOf(i) {
+    if (S && S.spec) return i === 0 ? CH[1] : CH[0];
     if (S && S.n > 2) return CH[i];
     var mine = S && S.mode !== 'boss' && (S.bots.length || S.online) ? S.me : 0;
     return i === mine ? CH[1] : CH[0];
   }
   art.padColor = colorOf;
   function padLabel(i) {
+    if (S && S.spec) return esc(slotName(i));
     if (S && (S.online || S.sim) && i === S.me) return esc(S.names && S.names[i] ? S.names[i] : SD.store.name(0)) + '<i class="you-tag">YOU</i>';
     return esc(slotName(i));
   }
@@ -232,7 +234,7 @@ SD.games = SD.games || [];
   function stopSpeech() { try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (e) {} }
 
   /* ---------- power-up loadout: picked before game 1 and again after game 3 (up to 2 power-ups) ---------- */
-  function pickEnabled() { return S.mode !== 'boss' && S.mode !== 'roulette' && (S.bots.length || S.online) && SD.powers; }
+  function pickEnabled() { return !S.spec && S.mode !== 'boss' && S.mode !== 'roulette' && (S.bots.length || S.online) && SD.powers; }
   function needPick() { return pickEnabled() && !S.tiebreak && S.gameNo === 0; }
   /* arm a player's picks. HEAD START is paid at once, the rest wait until they kick in */
   function arm(slot, ids) {
@@ -421,7 +423,8 @@ SD.games = SD.games || [];
   }
   function beginRound(game, active) {
     clearAll();
-    S.t0 = performance.now(); S.roundNo++; S.settle = null; if (!S.tiebreak) S.gameNo++; S.rng = mulberry32((S.mrng() * 4294967296) >>> 0);
+    S.t0 = performance.now(); S.roundNo++; S.settle = null; if (!S.tiebreak) S.gameNo++;
+    S.rngSeed = (S.mrng() * 4294967296) >>> 0; S.rng = mulberry32(S.rngSeed);
     S.active = active.slice(); S.game = game; S.accepting = false; S.onDown = S.onUp = null; S.ended = false;
     S.lastGame = game.id;
     pads.forEach(function (p, i) {
@@ -465,6 +468,7 @@ SD.games = SD.games || [];
         if (DUR[G.id] && typeof G.start === 'function') showTimer(DUR[G.id] * 1000);
         G.start(makeCtx());
         flushRemote();
+        sendSnap({ t: 'go', gid: G.id, rng: S.rngSeed, totals: S.totals.slice(), gameNo: S.gameNo, title: G.title, ts: Date.now() });
       }, 450);
     }
   }
@@ -501,6 +505,10 @@ SD.games = SD.games || [];
     hideTimer(); clearCenter(); dropTags();
     S.frameFn = null; cancelAnimationFrame(S.raf); S.raf = 0;
     if (S.game.cleanup) { try { S.game.cleanup(); } catch (e) {} }
+    if (S.spec) {
+      later(function () { if (S && S.spec && !S.specGotEnd) waitWatch('NEXT GAME SOON'); }, 7000);
+      return;
+    }
     if (S.online) return onlineSettle(results);
     finishRound(results);
   }
@@ -524,7 +532,7 @@ SD.games = SD.games || [];
   function finishRound(results) {
     var act = S.active, res = {}, i, used = [];
     var has = function (slot, id) { return (S.act[slot] || []).indexOf(id) >= 0; };
-    var count = S.series && !S.tiebreak && S.mode !== 'boss';
+    var count = !S.spec && S.series && !S.tiebreak && S.mode !== 'boss';
     var tag = function (r, p, label) { var o = {}; for (var k in r) o[k] = r[k]; o.p = p; o.label = label; return o; };
     if (count && act.length === 2) {
       var a0 = results[0].p, a1 = results[1].p;
@@ -569,7 +577,8 @@ SD.games = SD.games || [];
       later(function () { powerFx(u[0], u[1], say[0], say[1], true); }, 250 + k * 300);
     });
     updatePts();
-    var meI = (S.bots.length || S.online) ? S.me : -1;
+    sendSnap({ t: 'end', totals: S.totals.slice(), title: S.game ? S.game.title : '', ts: Date.now() });
+    var meI = S.spec ? -1 : (S.bots.length || S.online) ? S.me : -1;
     if (S.mode === 'boss') { if (results[0].p === 1) au.sfx.win(); else au.sfx.lose(); }
     else if (allTie) au.sfx.bwoop();
     else if (meI >= 0 && res[meI]) { if (res[meI].p === best) au.sfx.roundWin(); else au.sfx.roundLose(); }
@@ -580,6 +589,11 @@ SD.games = SD.games || [];
   }
 
   function afterRound(act, score, worst, allTie) {
+    if (S.spec) {
+      S.game = null; S.accepting = false;
+      setCenter('<div class="tie">WATCHING<small>NEXT GAME SOON</small></div>', 'pop');
+      return;
+    }
     if (S.mode === 'boss') return bossCeremony(score[act[0]] === 1);
     if (S.series && !S.tiebreak) {
       if (S.queue.length) return playRound(S.queue.shift(), S.all.slice());
@@ -739,14 +753,17 @@ SD.games = SD.games || [];
     var q = S.remoteQ; S.remoteQ = [];
     q.forEach(function (ev) { if (ev.t === 'd') press(ev.i, true); else release(ev.i, true); });
   }
-  function onRemote(kind) {
-    var ps = 1 - S.me;
+  function onRemote(kind, slot) {
+    var ps = slot == null ? 1 - S.me : slot;
     if (S.accepting) { if (kind === 'd') press(ps, true); else release(ps, true); }
     else S.remoteQ.push({ t: kind, i: ps });
   }
+  function sendSnap(snap) {
+    if (!S || S.spec || !S.online || S.online.role !== 'host' || !S.online.onSnap) return;
+    try { S.online.onSnap(snap); } catch (e) {}
+  }
   function onNet(m) {
     if (!S || !S.online || !m) return;
-    var ps = 1 - S.me;
     if (m.t === 'd') onRemote('d');
     else if (m.t === 'u') onRemote('u');
     else if (m.t === 'r') { S.peerRes[m.n] = m; if (S.settle && m.n === S.roundNo) S.settle(); }
@@ -812,6 +829,86 @@ SD.games = SD.games || [];
     try { navigator.clipboard.writeText(text + ' ' + url).then(done, function () {}); } catch (e) {}
   }
 
+  /* ---------- live spectate: full arena, both pads are remote, host snaps start each game ---------- */
+  function byId(id) { for (var i = 0; i < SD.games.length; i++) if (SD.games[i].id === id) return SD.games[i]; return null; }
+  function markWatch() {
+    var old = arenaEl.querySelector('.watch-live'); if (old) old.remove();
+    var b = document.createElement('div'); b.className = 'watch-live'; b.textContent = 'LIVE';
+    arenaEl.appendChild(b);
+  }
+  function waitWatch(msg) {
+    hideTimer();
+    setCenter('<div class="tie">WATCHING<small>' + (msg || 'NEXT GAME SOON') + '</small></div>', 'pop');
+  }
+  function startWatchSession(spec) {
+    stopSpeech();
+    var tap = document.getElementById('tapStart'); if (tap) tap.hidden = true;
+    art.setLive(0, spec.a && spec.a.skin | 0); art.setLive(1, spec.b && spec.b.skin | 0);
+    S = { mode: 'online', n: 2, bots: [], nolocal: [0, 1], me: 0, spec: true, specStop: spec.onStop, specGotEnd: false,
+      online: { role: 'host', kind: 'spec', arena: spec.arena | 0, peer: { send: function () {}, onmessage: null, onclose: null } },
+      roundNo: 0, peerRes: {}, remoteQ: [], armed: [[], []], act: [[], []], want: [[], []], peerUse: {}, useOpen: false, peerPw: {},
+      rated: false, names: [spec.a && spec.a.name || 'P1', spec.b && spec.b.name || 'P2'],
+      seed: spec.seed | 0, skill: 0.5, level: spec.level | 0 || 1, hard: 0, tier: 0, all: [0, 1],
+      totals: (spec.totals && spec.totals.slice()) || [0, 0], timers: [], raf: 0, frameFn: null, last: 0,
+      active: [0, 1], game: null, accepting: false, onDown: null, onUp: null, ended: false, lastGame: null,
+      tie: 0, tiebreak: false, round: 0, queue: [], series: true, total: spec.total || 3, gameNo: 0 };
+    S.mrng = mulberry32(S.seed);
+    $('#home').hidden = true; ceremonyEl.hidden = true; arenaEl.hidden = false;
+    if (SD.arenas) { if (SD.arenas.force) SD.arenas.force(spec.arena | 0); SD.arenas.enter(arenaEl); }
+    buildPads(2); updatePts(); clearCenter(); hideTimer(); markWatch();
+    waitWatch('WAITING FOR THE NEXT GAME');
+    au.music.start('game');
+    if (spec.snap) applySnap(spec.snap);
+  }
+  function applySnap(snap) {
+    if (!S || !S.spec || !snap) return;
+    if (snap.t === 'go') specGo(snap);
+    else if (snap.t === 'end') specEnd(snap);
+  }
+  function specGo(snap) {
+    if (snap.ts && Date.now() - snap.ts > 900) return waitWatch((snap.title || 'LIVE MATCH') + ' · NEXT GAME');
+    var game = byId(snap.gid); if (!game) return waitWatch(snap.title || 'LIVE MATCH');
+    if (Array.isArray(snap.totals)) { S.totals = snap.totals.slice(); updatePts(); }
+    if (snap.gameNo) S.gameNo = snap.gameNo;
+    clearAll(); if (S.game && S.game.cleanup) { try { S.game.cleanup(); } catch (e) {} }
+    S.specGotEnd = false; S.ended = false; S.settle = null; S.remoteQ = [];
+    S.rngSeed = snap.rng >>> 0; S.rng = mulberry32(S.rngSeed);
+    S.active = [0, 1]; S.game = game; S.accepting = false; S.onDown = S.onUp = null; S.lastGame = game.id;
+    pads.forEach(function (p, i) {
+      p.el.className = 'pad p' + i; p.stage.innerHTML = ''; p.badge.innerHTML = ''; p.mood = '';
+      Array.prototype.forEach.call(p.el.querySelectorAll('.pfx, .pfx-ready'), function (t) { t.remove(); });
+      setFace(i, 'idle');
+    });
+    hideTimer(); clearCenter(); markWatch();
+    showGo(game.goText || 'GO!');
+    S.accepting = true;
+    if (DUR[game.id]) showTimer(DUR[game.id] * 1000);
+    game.start(makeCtx());
+    flushRemote();
+  }
+  function specEnd(snap) {
+    if (!S || !S.spec) return;
+    S.specGotEnd = true;
+    if (Array.isArray(snap.totals)) { S.totals = snap.totals.slice(); updatePts(); }
+    if (!S.ended) {
+      S.ended = true; S.accepting = false;
+      if (S.game && S.game.cleanup) { try { S.game.cleanup(); } catch (e) {} }
+      S.frameFn = null; cancelAnimationFrame(S.raf); S.raf = 0; hideTimer();
+    }
+    pads.forEach(function (p, i) {
+      var mine = S.totals[i], best = Math.max(S.totals[0], S.totals[1]), worst = Math.min(S.totals[0], S.totals[1]);
+      p.el.classList.toggle('win', mine === best && best !== worst);
+      p.el.classList.toggle('lose', mine === worst && best !== worst);
+    });
+    later(function () { if (S && S.spec) waitWatch('NEXT GAME SOON'); }, 1600);
+  }
+  function specEvent(slot, m) {
+    if (!S || !S.spec || !m) return;
+    if (m.t === 'd') onRemote('d', slot);
+    else if (m.t === 'u') onRemote('u', slot);
+    else if (m.t === 'pl' && typeof m.id === 'string') liveUse(slot, m.id, true);
+  }
+
   /* ---------- safety net: an error during a match or end screen must never leave the player stuck ---------- */
   function rescue() {
     if (document.getElementById('rescueBtn')) return;
@@ -837,9 +934,28 @@ SD.games = SD.games || [];
     start: function (mode) { startSession(mode); },
     startOnline: function (conn) { startSession('online', conn); },
     startSim: function (sim) { startSession('pay', null, { sim: sim }); },
+    watch: function (spec) { startWatchSession(spec || {}); },
+    specSnap: function (snap) { applySnap(snap); },
+    specEvent: function (slot, m) { specEvent(slot, m); },
+    watching: function () { return !!(S && S.spec); },
     home: function () {
       var rb = document.getElementById('rescueBtn'); if (rb) rb.remove();
       if (SD.cg) SD.cg.stop();
+      var spec = !!(S && S.spec), specStop = spec ? S.specStop : null;
+      if (spec) {
+        if (S) { clearAll(); if (S.game && S.game.cleanup) { try { S.game.cleanup(); } catch (e) {} } }
+        S = null; stopSpeech(); art.setLive(0, null); art.setLive(1, null);
+        var lb = document.getElementById('leaveBox'); if (lb) lb.remove();
+        var ban = arenaEl.querySelector('.watch-live'); if (ban) ban.remove();
+        if (fx && fx.stop) fx.stop();
+        arenaEl.hidden = true; ceremonyEl.hidden = true;
+        hideTimer(); clearCenter(); padsEl.innerHTML = ''; pads = [];
+        $('#goText').classList.remove('on');
+        if (SD.arenas) SD.arenas.leave();
+        au.music.start('menu');
+        if (specStop) specStop();
+        return;
+      }
       var tour = !!(S && S.online && S.online.kind === 'tour');
       if (tour && !S.tourEnded) { S.tourEnded = true; try { S.online.onEnd(1 - S.me); } catch (er) {} }
       if (SD.party && S && S.online && !tour) SD.party.matchOver();

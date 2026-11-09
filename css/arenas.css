@@ -30,3 +30,9 @@ body[data-arena] .pad { box-shadow: 0 7px 0 var(--ink), 0 0 0 5px var(--ar-ac), 
 .ar-card .ar-prev { position: absolute; top: 6px; right: 6px; font-size: 8px; padding: 3px 6px; border-radius: 99px; background: #fff; color: var(--ink); text-shadow: none; box-shadow: 0 2px 0 var(--ink); }
 .ar-close { position: absolute; left: 50%; bottom: calc(18px + var(--sb, 0px)); transform: translateX(-50%); z-index: 12; min-width: 220px; }
 .arena-banner.stay { animation: none; opacity: 1; top: calc(12px + var(--st, 0px)); transform: translate(-50%, 0); }
+.watch-live {
+  position: absolute; top: calc(8px + var(--st, 0px)); left: 50%; transform: translateX(-50%);
+  z-index: 12; pointer-events: none; font-family: var(--font-p); font-weight: 700; font-size: 12px;
+  background: #ff4d6d; color: #fff; border: 3px solid var(--ink); border-radius: 99px;
+  padding: 4px 12px; box-shadow: 0 3px 0 var(--ink); letter-spacing: .04em;
+}
