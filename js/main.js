@@ -3,6 +3,19 @@
   'use strict';
   var art = SD.art, au = SD.audio, st = SD.store, pr = SD.progress;
   var $ = function (s) { return document.querySelector(s); };
+  var PAGES = ['offline', 'arenas', 'powers', 'settings', 'wardrobe', 'online', 'party'];
+  function pageOpen(id) {
+    var el = $(id.indexOf('#') === 0 ? id : '#' + id); if (!el) return;
+    $('#home').hidden = true; el.hidden = false;
+  }
+  function pageClose(id) {
+    var el = $(id.indexOf('#') === 0 ? id : '#' + id); if (el) el.hidden = true;
+    var arena = $('#arena'), cere = $('#ceremony');
+    if ((arena && !arena.hidden) || (cere && !cere.hidden)) return;
+    var open = PAGES.some(function (k) { var n = document.getElementById(k); return n && !n.hidden; });
+    if (!open) { $('#home').hidden = false; refresh(); }
+  }
+  SD.page = { open: pageOpen, close: pageClose };
 
   var CG = SD.BUILD === 'cg';
   var TOGGLES = [['#btnMusic', 'music', 'music'], ['#btnSfx', 'sfx', 'speaker'], ['#btnVoice', 'voice', 'voice']];
@@ -90,7 +103,7 @@
     });
     bindKeyBtns($('#ofRow'), renderOffline);
   }
-  function openOffline() { renderOffline(); $('#offline').hidden = false; }
+  function openOffline() { renderOffline(); pageOpen('offline'); }
 
   /* ---------- power-up shop ---------- */
   var shopTab = 'common';
@@ -135,7 +148,7 @@
         openArenas();
       });
     });
-    $('#arenas').hidden = false;
+    pageOpen('arenas');
   }
   function previewArena(id) {
     var A = SD.arenas, a = A.byId(id); if (!a) return;
@@ -147,14 +160,14 @@
     var old = arena.querySelector('.ar-close'); if (old) old.remove();
     var b = document.createElement('button'); b.type = 'button'; b.className = 'gel ar-close'; b.innerHTML = '<span>CLOSE PREVIEW</span>';
     b.addEventListener('click', function () {
-      b.remove(); A.leave(); arena.hidden = true; $('#home').hidden = false; openArenas();
+      b.remove(); A.leave(); arena.hidden = true; openArenas();
     });
     arena.appendChild(b);
     var ban = arena.querySelector('.arena-banner'); if (ban) ban.remove();
     var nb = document.createElement('div'); nb.className = 'arena-banner stay'; nb.innerHTML = '<small>PREVIEW</small>' + a.name;
     arena.appendChild(nb);
   }
-  function openShop() { renderShop(); $('#powers').hidden = false; }
+  function openShop() { renderShop(); pageOpen('powers'); }
 
   function buildBoss() {
     var id = pr.info().gated ? pr.bossSkin() : -1, w = $('#bossWrap');
@@ -210,14 +223,14 @@
       });
     });
   }
-  function openSettings() { buildSettings(); $('#settings').hidden = false; }
+  function openSettings() { buildSettings(); pageOpen('settings'); }
 
   /* ---------- skin picker ---------- */
   var wdTimer = 0, wdSlot = 0, wdSel = 0;
   var MOODS = ['idle', 'cheer', 'laugh', 'worry', 'sad', 'dizzy', 'pied'];
   function openWardrobe(slot) {
     wdSlot = slot; wdSel = art.slotSkin(slot);
-    $('#wardrobe').hidden = false;
+    pageOpen('wardrobe');
     $('#wdTitle').textContent = slot === 0 ? 'PLAYER 1 LOOK' : 'PLAYER 2 LOOK';
     var ni = $('#wdNameIn');
     ni.value = st.name(slot); ni.readOnly = false;
@@ -253,10 +266,10 @@
     });
   }
   function closeWardrobe() {
-    clearInterval(wdTimer); $('#wardrobe').hidden = true; au.sfx.tap(); au.music.refresh();
+    clearInterval(wdTimer); au.sfx.tap(); au.music.refresh();
     var ni = $('#wdNameIn');
     if (!ni.readOnly) { if (st.setName(wdSlot, ni.value) && wdSlot === 0 && SD.net) SD.net.sync(); }
-    refresh();
+    pageClose('wardrobe');
     if (!$('#offline').hidden) renderOffline();
   }
 
@@ -282,14 +295,14 @@
     }, 350);
     $('#btnSettings').innerHTML = art.icon('gear');
     $('#ofGo').addEventListener('click', function () { au.sfx.select(); $('#offline').hidden = true; SD.engine.start('pay'); });
-    $('#ofBack').addEventListener('click', function () { au.sfx.tap(); $('#offline').hidden = true; });
-    $('#arDone').addEventListener('click', function () { au.sfx.tap(); $('#arenas').hidden = true; });
-    $('#pwDone').addEventListener('click', function () { au.sfx.tap(); $('#powers').hidden = true; buildCoins(); });
+    $('#ofBack').addEventListener('click', function () { au.sfx.tap(); pageClose('offline'); });
+    $('#arDone').addEventListener('click', function () { au.sfx.tap(); pageClose('arenas'); });
+    $('#pwDone').addEventListener('click', function () { au.sfx.tap(); pageClose('powers'); buildCoins(); });
     var acct = $('#stAccount');
     if (CG || !(SD.net && SD.net.configured())) acct.style.display = 'none';
     else acct.addEventListener('click', function () { au.sfx.select(); $('#settings').hidden = true; SD.lobby.open(); });
     $('#btnSettings').addEventListener('click', function () { au.sfx.select(); openSettings(); });
-    $('#stDone').addEventListener('click', function () { au.sfx.tap(); $('#settings').hidden = true; }); 
+    $('#stDone').addEventListener('click', function () { au.sfx.tap(); pageClose('settings'); }); 
     SD.engine.home();
     if (!CG && SD.net) SD.net.boot().then(function (loaded) { if (loaded) { refresh(); au.music.refresh(); } });
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {

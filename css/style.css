@@ -616,8 +616,51 @@ body.desk #home .duel { grid-column: 1; width: 100%; }
 body.desk #home .modes { grid-column: 2; grid-row: 2 / 4; width: 100%; margin: 0; }
 body.desk #home .foot { grid-column: 1; }
 body.desk #home .mode-grid .mode { min-height: 96px; font-size: 18px; }
-body.desk .on-card, body.desk .wd-card { width: min(520px, 90vw); max-height: 90vh; }
+/* cover pages: menu screens fill the window (not floating popups) */
+#wardrobe, #online, #party, #settings, #offline, #powers, #arenas, #simSearch {
+  z-index: 24;
+  align-items: stretch;
+  justify-content: flex-start;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  overflow: hidden;
+  padding: calc(var(--st) + 12px) max(14px, var(--sr)) calc(var(--sb) + 14px) max(14px, var(--sl));
+}
+.on-card, .wd-card {
+  width: 100%;
+  max-width: 420px;
+  max-height: none;
+  flex: 1 1 auto;
+  height: auto;
+  margin: 0 auto;
+  padding: 4px 2px 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  gap: 10px;
+  overflow: hidden;
+  min-height: 0;
+}
+.on-card { justify-content: flex-start; overflow-y: auto; }
+.wd-grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.ar-grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.pw-card-wrap { width: 100%; max-width: 420px; max-height: none; }
+.of-card, .st-card { width: 100%; max-width: 420px; }
+.lb { max-height: none; flex: 1 1 auto; min-height: 120px; }
+.tl-list { max-height: none; }
+
 body.desk #online, body.desk #party, body.desk #wardrobe, body.desk #settings,
 body.desk #offline, body.desk #powers, body.desk #arenas, body.desk #simSearch {
-  padding: 24px;
+  padding: 28px 40px 24px;
 }
+body.desk .on-card, body.desk .wd-card, body.desk .pw-card-wrap, body.desk .of-card, body.desk .st-card {
+  width: 100%;
+  max-width: 560px;
+  max-height: none;
+}
+body.desk .wd-grid { grid-template-columns: repeat(6, 1fr); }
+body.desk .pw-sgrid { grid-template-columns: 1fr 1fr 1fr; }
+body.desk .ar-grid { grid-template-columns: 1fr 1fr 1fr; }
+body.desk .on-card .gel { min-height: 60px; font-size: 20px; }

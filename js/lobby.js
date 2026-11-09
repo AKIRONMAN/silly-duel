@@ -6,6 +6,7 @@
   var root, card, token = 0, entryBack = null;
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function showRoot() { root.hidden = false; if (SD.page) SD.page.open('online'); }
   function N() { return SD.net; }
   function show(html) { card.innerHTML = html; }
   function bind(sel, fn) { var e = card.querySelector(sel); if (e) e.addEventListener('click', function () { au.sfx.tap(); fn(e); }); }
@@ -28,7 +29,7 @@
     }, function (e) { var x = $('#onErr'); if (x) x.textContent = N().nice(e); au.sfx.bwoop(); });
   }
   function open() {
-    root.hidden = false; token++; entryBack = null;
+    showRoot(); token++; entryBack = null;
     if (!N().configured()) return localMenu();
     show('<h2>ACCOUNT</h2><p class="on-msg">LOADING...</p>');
     var t = token;
@@ -86,7 +87,7 @@
     try { navigator.clipboard.writeText(text + ' ' + url); var b = $('#onInvite'); if (b) b.querySelector('span').textContent = 'LINK COPIED'; } catch (e) {}
   }
   function autoJoin(code) {
-    root.hidden = false; token++;
+    showRoot(); token++;
     var t = token;
     show('<h2>JOINING ROOM</h2><div class="on-face spin">' + art.face(0, 'worry') + '</div><p class="on-msg">CODE ' + esc(code) + '...</p><button class="gel alt" id="onCancel" type="button"><span>CANCEL</span></button>');
     bind('#onCancel', function () { N().cancel(); close(); });
@@ -95,7 +96,7 @@
   }
   /* home screen shortcut: straight to a fresh room code to send to a friend */
   function openRoom() {
-    root.hidden = false; token++;
+    showRoot(); token++;
     if (!N().configured()) return makeRoom();
     var t = token;
     show('<h2>ONLINE</h2><div class="on-face">' + art.face(0, 'idle') + '</div><p class="on-msg">CONNECTING...</p>');
@@ -103,7 +104,7 @@
   }
   /* PLAY ONLINE: straight into a rated random match */
   function quickPlay() {
-    root.hidden = false; token++; entryBack = close;
+    showRoot(); token++; entryBack = close;
     if (!N().configured()) {
       show('<h2>PLAY ONLINE</h2><div class="on-face">' + art.face(0, 'worry') + '</div><p class="on-msg">ONLINE MATCHES ARE NOT SET UP YET<small>Add your Firebase config (see README).</small></p>' + back());
       bind('#onBack', close); return;
@@ -114,7 +115,7 @@
   }
   /* CREATE A ROOM: make one or join with a code (friends only, no level or coins) */
   function roomMenu() {
-    root.hidden = false; token++; entryBack = roomChooser;
+    showRoot(); token++; entryBack = roomChooser;
     if (!N().configured()) return localMenu();
     var t = token;
     show('<h2>CREATE A ROOM</h2><div class="on-face">' + art.face(0, 'idle') + '</div><p class="on-msg">CONNECTING...</p>');
@@ -126,7 +127,7 @@
       '<button class="gel alt" id="onJoin" type="button"><span>JOIN WITH A CODE</span></button><button class="gel alt" id="onParty" type="button"><span>PARTY (3+ FRIENDS)</span></button>' + back());
     bind('#onMake', makeRoom); bind('#onJoin', joinForm); bind('#onParty', function () { SD.party.menu(); }); bind('#onBack', close);
   }
-  function close() { boardHome = false; token++; N().cancel(); root.hidden = true; SD.main.refresh(); }
+  function close() { boardHome = false; token++; N().cancel(); if (SD.page) SD.page.close('online'); else { root.hidden = true; SD.main.refresh(); } }
 
   function menu() {
     var u = N().backend.user(), i = SD.progress.info();
@@ -182,7 +183,7 @@
   /* ---------- leaderboard ---------- */
   var boardHome = false;
   function openBoard() {
-    root.hidden = false; token++; boardHome = true;
+    showRoot(); token++; boardHome = true;
     if (!N().configured()) {
       show('<h2>TOP 100</h2><div class="on-face">' + art.face(0, 'worry') + '</div><p class="on-msg">LEADERBOARD NEEDS ONLINE MODE<small>Add your Firebase config to switch it on (see README).</small></p>' + back());
       bind('#onBack', close); return;
