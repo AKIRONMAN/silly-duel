@@ -69,8 +69,8 @@ function startMatch(a, b, kind, extra) {
   for (var k in extra || {}) m[k] = extra[k];
   m.seed = seed; m.arena = al;
   matches[m.mid] = m; a.match = b.match = m.mid;
-  a.send({ t: 'match', mid: m.mid, kind: kind, role: 'host', seed: seed, opp: info(b), arena: al, total: kind === 'tour' ? 3 : 0, room: m.room || '' });
-  b.send({ t: 'match', mid: m.mid, kind: kind, role: 'guest', seed: seed, opp: info(a), arena: al, total: kind === 'tour' ? 3 : 0, room: m.room || '' });
+  a.send({ t: 'match', mid: m.mid, kind: kind, role: 'host', seed: seed, you: info(a), opp: info(b), arena: al, total: kind === 'tour' ? 3 : 0, room: m.room || '' });
+  b.send({ t: 'match', mid: m.mid, kind: kind, role: 'guest', seed: seed, you: info(b), opp: info(a), arena: al, total: kind === 'tour' ? 3 : 0, room: m.room || '' });
   return m;
 }
 function dropMatch(m) { if (!m) return; delete matches[m.mid]; [m.a, m.b].forEach(function (id) { var c = clients[id]; if (c && c.match === m.mid) c.match = 0; }); }

@@ -89,16 +89,18 @@ SD.games = SD.games || [];
   }
   art.padColor = colorOf;
   function padLabel(i) {
-    if (S && S.spec) return esc(slotName(i));
-    if (S && (S.online || S.sim) && i === S.me) return esc(S.names && S.names[i] ? S.names[i] : SD.store.name(0)) + '<i class="you-tag">YOU</i>';
-    return esc(slotName(i));
+    var n = slotName(i);
+    if (S && !S.spec && (S.online || S.sim) && i === S.me) return esc(n) + '<i class="you-tag">YOU</i>';
+    return esc(n);
   }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function slotName(i) {
-    if (S && (S.online || S.sim) && i === S.me) return 'YOU';
     if (S && S.names && S.names[i]) return S.names[i];
+    if (S && (S.online || S.sim) && i === S.me) return (S.online && S.online.myName) || SD.store.name(0) || 'YOU';
+    if (S && S.online && i !== S.me) return (S.online.opp && S.online.opp.name) || 'RIVAL';
     if (S && S.bots.indexOf(i) >= 0) return 'BOT';
-    return SD.store.name(i) || art.skinName(art.slotSkin(i));
+    if (i === 0) return SD.store.name(0) || 'YOU';
+    return SD.store.name(i) || 'FRIEND';
   }
 
   function setFace(i, mood, opts) {
@@ -208,13 +210,20 @@ SD.games = SD.games || [];
     art.setLive(0, null); art.setLive(1, null);
     if (bots.length) art.setLive(1, sim ? sim.skin : art.botSkin());          // the bot always wears the same look; a simulated player has its own
     if (online) {
-      art.setLive(me, SD.store.get('skins')[0]); art.setLive(1 - me, conn.opp.skin | 0);
+      var mySkin = (conn.you && conn.you.skin != null) ? (conn.you.skin | 0) : (SD.store.get('skins')[0] | 0);
+      var oppSkin = (conn.opp && conn.opp.skin != null) ? (conn.opp.skin | 0) : 0;
+      art.setLive(me, mySkin); art.setLive(1 - me, oppSkin);
       conn.againMe = conn.againPeer = false;
     }
     var tap = document.getElementById('tapStart'); if (tap) tap.hidden = true;
     S = { mode: mode, n: n, bots: bots, nolocal: online ? [1 - me] : bots.slice(), me: me, online: online ? conn : null, roundNo: 0, peerRes: {}, remoteQ: [],
       armed: [[], []], act: [[], []], want: [[], []], peerUse: {}, useOpen: false, peerPw: {}, pwWait: null, sim: sim, rated: !!(online && conn.kind === 'random') || !!sim, oppLevel: online ? (conn.opp.level | 0) : sim ? sim.level : 0, coinDelta: 0, t0: 0,
-      names: online ? (function () { var a = []; a[me] = conn.myName; a[1 - me] = conn.opp.name; return a; })() : sim ? [SD.store.name(0), sim.name] : null,
+      names: online ? (function () {
+        var a = [];
+        a[me] = (conn.you && conn.you.name) || conn.myName || SD.store.name(0) || 'YOU';
+        a[1 - me] = (conn.opp && conn.opp.name) || 'RIVAL';
+        return a;
+      })() : sim ? [SD.store.name(0), sim.name] : null,
       seed: online ? conn.seed : (Math.random() * 4294967296) >>> 0, skill: skill, level: lvl, hard: hard, tier: boss ? SD.progress.tier() : 0, all: [], totals: [], timers: [], raf: 0, frameFn: null, last: 0, active: [], game: null, accepting: false, onDown: null, onUp: null, ended: false, lastGame: null, tie: 0, tiebreak: false, round: 0, queue: [], series: mode === 'pay' || mode === 'party' || online, total: 0, gameNo: 0 };
     for (var i = 0; i < n; i++) { S.all.push(i); S.totals.push(0); }
     S.mrng = mulberry32(S.seed);
@@ -441,6 +450,7 @@ SD.games = SD.games || [];
       } else setFace(i, 'idle');
     });
     S.act = [[], []]; S.want = [[], []]; S.useOpen = false; S.liveFn = null;
+    pads.forEach(function (p, i) { var n = p.el.querySelector('.pad-name'); if (n) n.innerHTML = padLabel(i); });
     var canUse = pickEnabled() && (usableNow(0).length || usableNow(1).length);
     if (canUse) {
       S.useOpen = true;

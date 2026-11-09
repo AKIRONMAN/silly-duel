@@ -109,15 +109,19 @@
     else if (m.t === 'err') { var e = $('#pErr'); if (e) e.textContent = m.e; else { show('<h2>PARTY</h2><p class="on-msg">' + esc(m.e) + '</p>' + back()); bind('#pBack', menu); } }
     else if (m.t === 'room') {
       V = m.v; remember(V.code);
-      if (watching) {
+      if (watching && !inMatch) {
         var still = V.matches.filter(function (x) { return x.mid === watchMid && x.live; })[0];
-        if (!still) { watchMid = 0; if (SD.engine.watching && SD.engine.watching()) SD.engine.home(); else { watching = false; if (!inMatch) render(); } }
+        if (!still) { watchMid = 0; if (SD.engine.watching && SD.engine.watching()) SD.engine.home(); else { watching = false; render(); } }
         return;
       }
-      if (!inMatch) render();
+      if (!inMatch && !watching) render();
     }
     else if (m.t === 'left') { V = null; remember(''); }
-    else if (m.t === 'match') { pending = m; queued = false; if (m.kind !== 'tour') remember(''); if (!inMatch) launch(); }
+    else if (m.t === 'match') {
+      pending = m; queued = false; if (m.kind !== 'tour') remember('');
+      if (watching) { watching = false; watchMid = -1; }
+      if (!inMatch) launch();
+    }
     else if (m.t === 'relay') { if (curConn && curConn.mid === m.mid) curConn.deliver(m.m); }
     else if (m.t === 'snap') { if (watching && m.mid === watchMid && SD.engine.specSnap) SD.engine.specSnap(m.snap); }
     else if (m.t === 'spec') { if (watching && m.mid === watchMid && SD.engine.specEvent) SD.engine.specEvent(m.slot, m.m); }
@@ -127,7 +131,8 @@
     var m = pending; pending = null; if (!m) return;
     var q = [], handler = null, peer = { send: function (o) { send({ t: 'relay', mid: m.mid, m: o }); }, close: function () {}, onclose: null };
     Object.defineProperty(peer, 'onmessage', { get: function () { return handler; }, set: function (f) { handler = f; if (f) q.splice(0).forEach(f); } });
-    var conn = { peer: peer, role: m.role, id: m.room || 'SERVER', opp: m.opp, myName: st.name(0), seed: m.seed, kind: m.kind, mid: m.mid, arena: m.arena, againMe: false, againPeer: false,
+    var mine = m.you || partyMe() || { name: st.name(0), skin: (st.get('skins') || [0])[0], level: SD.progress.info().level };
+    var conn = { peer: peer, role: m.role, id: m.room || 'SERVER', you: mine, opp: m.opp || {}, myName: mine.name || st.name(0), seed: m.seed, kind: m.kind, mid: m.mid, arena: m.arena, againMe: false, againPeer: false,
       deliver: function (o) { if (handler) handler(o); else q.push(o); },
       onSnap: function (snap) { send({ t: 'snap', mid: m.mid, snap: snap }); } };
     if (m.kind === 'tour') {
@@ -253,7 +258,7 @@
     }
     var watchHint = live.length ? '<p class="on-note">Tap a LIVE match to watch it in the full arena.</p>' : '';
     show('<h2>' + label + '</h2><p class="on-msg tl">' + line + '<small>' + alive + ' PLAYERS LEFT · FIRST TO 2 WINS</small></p>' + watchHint + '<div class="tms">' + V.matches.map(function (m) { return node(m, by); }).join('') + '</div>' + ready + back('LEAVE'));
-    bind('#pReady', function () { send({ t: 'ready', mid: mine.mid }); }); bind('#pBack', leave);
+    bind('#pReady', function () { send(profile()); send({ t: 'ready', mid: mine.mid }); }); bind('#pBack', leave);
     Array.prototype.forEach.call(card.querySelectorAll('.tm.live'), function (el) {
       el.addEventListener('click', function () {
         var id = +el.dataset.mid, hit = V.matches.filter(function (x) { return x.mid === id && x.live; })[0];
@@ -261,7 +266,13 @@
       });
     });
   }
+  function partyMe() {
+    if (!V || !V.players) return null;
+    for (var i = 0; i < V.players.length; i++) if (V.players[i].id === myId) return V.players[i];
+    return null;
+  }
   function startWatch(wm) {
+    if (inMatch || pending) return;
     if (!wm || !V || !SD.engine || !SD.engine.watch) return;
     if (watching && watchMid === wm.mid && SD.engine.watching && SD.engine.watching()) { send({ t: 'watch', mid: wm.mid }); return; }
     var by = {}; V.players.forEach(function (p) { by[p.id] = p; });
