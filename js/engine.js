@@ -345,6 +345,8 @@ SD.games = SD.games || [];
   }
   /* at GO the choices are locked for everybody. GAME power-ups are used up now, COMMON ones when they kick in */
   function lockAll() {
+    if (S.locked) return;
+    S.locked = true;
     S.useOpen = false;
     var peer = S.online ? S.peerUse[S.roundNo] || [] : null, picked = [[], []];
     [0, 1].forEach(function (slot) {
@@ -419,11 +421,13 @@ SD.games = SD.games || [];
   }
   function introMs(g) {
     var n = 0, m = {}; try { m = JSON.parse(localStorage.getItem('sd_seen') || '{}'); n = m[g.id] | 0; m[g.id] = n + 1; localStorage.setItem('sd_seen', JSON.stringify(m)); } catch (e) {}
+    if (S && S.online) return 2200;
     return n < 3 ? 4500 : 2600;
   }
   function beginRound(game, active) {
     clearAll();
-    S.t0 = performance.now(); S.roundNo++; S.settle = null; if (!S.tiebreak) S.gameNo++;
+    S.t0 = performance.now(); S.roundNo++; S.settle = null; S.waitGo = false; S.locked = false; if (!S.tiebreak) S.gameNo++;
+    if (S.peerGo && S.peerGo.n !== S.roundNo) S.peerGo = null;
     S.rngSeed = (S.mrng() * 4294967296) >>> 0; S.rng = mulberry32(S.rngSeed);
     S.active = active.slice(); S.game = game; S.accepting = false; S.onDown = S.onUp = null; S.ended = false;
     S.lastGame = game.id;
@@ -462,15 +466,54 @@ SD.games = SD.games || [];
       au.sfx.count(0);
       if (!S.game.goText) fx.flash('#fff');
       var G = S.game, SS = S;
-      later(function () {                          // a short beat after GO so nobody is caught off guard
+      later(function () {
         if (S !== SS || S.game !== G || S.ended) return;
-        S.accepting = true; paintUse();
-        if (DUR[G.id] && typeof G.start === 'function') showTimer(DUR[G.id] * 1000);
-        G.start(makeCtx());
-        flushRemote();
-        sendSnap({ t: 'go', gid: G.id, rng: S.rngSeed, totals: S.totals.slice(), gameNo: S.gameNo, title: G.title, ts: Date.now() });
+        kickOff();
       }, 450);
     }
+  }
+
+  function runStart() {
+    if (!S || S.ended || S.accepting || !S.game) return;
+    S.waitGo = false;
+    var G = S.game;
+    S.accepting = true; paintUse();
+    if (DUR[G.id] && typeof G.start === 'function') showTimer(DUR[G.id] * 1000);
+    G.start(makeCtx());
+    flushRemote();
+    if (S.online && !S.spec) {
+      var riv = pads[1 - S.me];
+      if (riv) riv.el.classList.add('rival-live');
+    }
+    sendSnap({ t: 'go', gid: G.id, rng: S.rngSeed, totals: S.totals.slice(), gameNo: S.gameNo, title: G.title, ts: Date.now() });
+  }
+  function kickOff() {
+    if (!S || S.ended || S.accepting) return;
+    if (!S.online || S.spec) return runStart();
+    if (S.online.role === 'host') {
+      try { S.online.peer.send({ t: 'go', n: S.roundNo, rng: S.rngSeed, gid: S.game.id }); } catch (e) {}
+      return runStart();
+    }
+    if (S.peerGo && S.peerGo.n === S.roundNo) {
+      if (S.peerGo.rng != null) { S.rngSeed = S.peerGo.rng >>> 0; S.rng = mulberry32(S.rngSeed); }
+      return runStart();
+    }
+    S.waitGo = true;
+    setCenter('<div class="tie">RIVAL<small>GET READY...</small></div>', 'pop');
+    later(function () { if (S && S.waitGo && !S.accepting && !S.ended) runStart(); }, 5000);
+  }
+  function onPeerGo(m) {
+    if (!S || S.spec || !m) return;
+    S.peerGo = m;
+    if (!S.online || S.online.role === 'host') return;
+    if (m.n != null && m.n !== S.roundNo) return;
+    if (m.rng != null) { S.rngSeed = m.rng >>> 0; S.rng = mulberry32(S.rngSeed); }
+    if (S.accepting || S.ended || !S.game) return;
+    S.timers.forEach(clearTimeout); S.timers = [];
+    S.waitGo = false;
+    lockAll();
+    showGo(S.game.goText || 'GO!');
+    runStart();
   }
 
   function makeCtx() {
@@ -754,7 +797,11 @@ SD.games = SD.games || [];
     q.forEach(function (ev) { if (ev.t === 'd') press(ev.i, true); else release(ev.i, true); });
   }
   function onRemote(kind, slot) {
-    var ps = slot == null ? 1 - S.me : slot;
+    var ps = slot == null ? (S.spec ? 0 : 1 - S.me) : slot;
+    if (pads[ps]) {
+      if (kind === 'd') { pads[ps].el.classList.add('down'); if (!S.accepting) setFace(ps, 'worry'); }
+      else pads[ps].el.classList.remove('down');
+    }
     if (S.accepting) { if (kind === 'd') press(ps, true); else release(ps, true); }
     else S.remoteQ.push({ t: kind, i: ps });
   }
@@ -766,6 +813,7 @@ SD.games = SD.games || [];
     if (!S || !S.online || !m) return;
     if (m.t === 'd') onRemote('d');
     else if (m.t === 'u') onRemote('u');
+    else if (m.t === 'go') onPeerGo(m);
     else if (m.t === 'r') { S.peerRes[m.n] = m; if (S.settle && m.n === S.roundNo) S.settle(); }
     else if (m.t === 'pw') { S.peerPw[m.n] = Array.isArray(m.p) ? m.p.slice(0, 3) : []; if (S.pwWait && S.pwWait.n === m.n) S.pwWait.go(); }
     else if (m.t === 'pl') { if (m.n === S.roundNo && typeof m.id === 'string' && SD.powers.by[m.id]) { var fp = 1 - S.me; if ((S.armed[fp] || []).indexOf(m.id) >= 0) liveUse(fp, m.id, true); } }

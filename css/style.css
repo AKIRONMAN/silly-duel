@@ -156,6 +156,7 @@ button { font: inherit; color: inherit; touch-action: manipulation; cursor: poin
 .pad.ready { box-shadow: 0 7px 0 var(--ink), 0 0 0 5px #fff, 0 0 0 9px var(--mint); }
 .pad.spot { transform: scale(1.03); box-shadow: 0 7px 0 var(--ink), 0 0 0 6px #fff, 0 0 0 12px var(--red); z-index: 3; }
 .pad.hot { animation: hotpulse .3s infinite alternate; }
+.pad.rival-live { outline: 3px solid rgba(255,255,255,.55); outline-offset: -3px; }
 @keyframes hotpulse { to { filter: brightness(1.1) saturate(1.35); } }
 
 .pad-top { display: flex; align-items: center; gap: 8px; padding: 6px 10px 0; min-height: 66px; flex: none; }
