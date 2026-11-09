@@ -122,10 +122,12 @@
     $('#arGrid').innerHTML = A.list.map(function (a) {
       var t = A.state(a);
       return '<button type="button" class="ar-card' + (t === 'shadow' ? ' locked' : '') + (t === 'own' && cur.id === a.id ? ' sel' : '') + '" data-id="' + a.id + '" style="background:' + a.bg + '">' +
-        (t === 'shadow' ? '???' : a.name) + '<small>' + (t === 'own' ? (cur.id === a.id ? 'IN USE' : 'TAP TO USE') : t === 'buy' ? 'BUY ' + a.cost : 'LEVEL ' + a.lvl) + '</small></button>';
+        (t === 'shadow' ? '???' : a.name) + '<small>' + (t === 'own' ? (cur.id === a.id ? 'IN USE' : 'TAP TO USE') : t === 'buy' ? 'BUY ' + a.cost : 'LEVEL ' + a.lvl) + '</small>' +
+        '<span class="ar-prev" data-id="' + a.id + '">PREVIEW</span></button>';
     }).join('');
     Array.prototype.forEach.call($('#arGrid').children, function (b) {
-      b.addEventListener('click', function () {
+      b.addEventListener('click', function (e) {
+        if (e.target.classList.contains('ar-prev')) { e.stopPropagation(); previewArena(b.dataset.id); return; }
         var a = A.byId(b.dataset.id), t = A.state(a);
         if (t === 'own') { A.pin(a.id); au.sfx.coin(); }
         else if (t === 'buy' && A.buy(a)) { au.sfx.coin(); au.sfx.perfect(); buildCoins(); }
@@ -134,6 +136,23 @@
       });
     });
     $('#arenas').hidden = false;
+  }
+  function previewArena(id) {
+    var A = SD.arenas, a = A.byId(id); if (!a) return;
+    var arena = $('#arena'), tap = $('#tapStart'); if (tap) tap.hidden = true;
+    $('#arenas').hidden = true; $('#home').hidden = true; $('#ceremony').hidden = true;
+    $('#pads').innerHTML = ''; arena.hidden = false;
+    if (A.state(a) === 'own') A.pin(a.id);
+    A.enter(arena, a.id);
+    var old = arena.querySelector('.ar-close'); if (old) old.remove();
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'gel ar-close'; b.innerHTML = '<span>CLOSE PREVIEW</span>';
+    b.addEventListener('click', function () {
+      b.remove(); A.leave(); arena.hidden = true; $('#home').hidden = false; openArenas();
+    });
+    arena.appendChild(b);
+    var ban = arena.querySelector('.arena-banner'); if (ban) ban.remove();
+    var nb = document.createElement('div'); nb.className = 'arena-banner stay'; nb.innerHTML = '<small>PREVIEW</small>' + a.name;
+    arena.appendChild(nb);
   }
   function openShop() { renderShop(); $('#powers').hidden = false; }
 

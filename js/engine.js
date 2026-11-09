@@ -87,6 +87,11 @@ SD.games = SD.games || [];
     return i === mine ? CH[1] : CH[0];
   }
   art.padColor = colorOf;
+  function padLabel(i) {
+    if (S && (S.online || S.sim) && i === S.me) return esc(S.names && S.names[i] ? S.names[i] : SD.store.name(0)) + '<i class="you-tag">YOU</i>';
+    return esc(slotName(i));
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function slotName(i) {
     if (S && (S.online || S.sim) && i === S.me) return 'YOU';
     if (S && S.names && S.names[i]) return S.names[i];
@@ -104,7 +109,7 @@ SD.games = SD.games || [];
   function updatePts() {
     if (S && S.online && S.online.onScore) { try { S.online.onScore(S.totals.slice(), S.game ? S.game.title : ''); } catch (er) {} }
     pads.forEach(function (p, i) {
-      p.ptsEl.innerHTML = S && S.series ? art.icon('trophy', 14) + '<b>' + S.totals[i] + '</b><small>/' + (Math.floor(S.total / 2) + 1) + '</small>' : '';
+      p.ptsEl.innerHTML = S && S.series ? art.icon('trophy', 14) + '<b>' + S.totals[i] + '</b><small>/' + S.total + '</small>' : '';
     });
   }
 
@@ -121,7 +126,7 @@ SD.games = SD.games || [];
         el.style.setProperty('--op', (i === mine) === (cv === 'bottom') ? 1 : 0); el.style.setProperty('--ol', (i === mine) === (ch === 'right') ? 1 : 0);
       }
       el.style.setProperty('--pc', c.pad); el.style.setProperty('--pf', c.fill); el.style.setProperty('--pd', c.deep);
-      el.innerHTML = '<div class="pad-top"><span class="pad-face"></span><span class="pad-name">' + slotName(i) + '</span><span class="pad-pw"></span><span class="pad-pts"></span>' + (S && S.bots.indexOf(i) >= 0 ? (S.sim ? '' : '<kbd class="bot">BOT</kbd>') : S && (S.mode === 'boss' || S.nolocal.indexOf(i) >= 0) ? '' : (padKey(i) ? '<kbd>' + (padKey(i) === 'SPACE' ? 'SPC' : padKey(i)) + '</kbd>' : '')) + (i === (mine >= 0 ? mine : 0) ? '<button type="button" class="pad-exit" aria-label="Exit">EXIT</button>' : '') + '</div><div class="pad-stage"></div><div class="pad-dock"></div><div class="pad-badge"></div>';
+      el.innerHTML = '<div class="pad-top"><span class="pad-face"></span><span class="pad-name">' + padLabel(i) + '</span><span class="pad-pw"></span><span class="pad-pts"></span>' + (S && S.bots.indexOf(i) >= 0 ? (S.sim ? '' : '<kbd class="bot">BOT</kbd>') : S && (S.mode === 'boss' || S.nolocal.indexOf(i) >= 0) ? '' : (padKey(i) ? '<kbd>' + (padKey(i) === 'SPACE' ? 'SPC' : padKey(i)) + '</kbd>' : '')) + (i === (mine >= 0 ? mine : 0) ? '<button type="button" class="pad-exit" aria-label="Exit">EXIT</button>' : '') + '</div><div class="pad-stage"></div><div class="pad-dock"></div><div class="pad-badge"></div>';
       padsEl.appendChild(el);
       var p = { el: el, faceEl: el.querySelector('.pad-face'), ptsEl: el.querySelector('.pad-pts'), stage: el.querySelector('.pad-stage'), badge: el.querySelector('.pad-badge'), dock: el.querySelector('.pad-dock'), mood: '', held: null };
       pads.push(p);
@@ -204,7 +209,8 @@ SD.games = SD.games || [];
       art.setLive(me, SD.store.get('skins')[0]); art.setLive(1 - me, conn.opp.skin | 0);
       conn.againMe = conn.againPeer = false;
     }
-    S = { mode: mode, n: n, bots: bots, nolocal: online ? [1 - me] : bots.slice(), me: me, online: online ? conn : null, roundNo: 0, peerRes: {},
+    var tap = document.getElementById('tapStart'); if (tap) tap.hidden = true;
+    S = { mode: mode, n: n, bots: bots, nolocal: online ? [1 - me] : bots.slice(), me: me, online: online ? conn : null, roundNo: 0, peerRes: {}, remoteQ: [],
       armed: [[], []], act: [[], []], want: [[], []], peerUse: {}, useOpen: false, peerPw: {}, pwWait: null, sim: sim, rated: !!(online && conn.kind === 'random') || !!sim, oppLevel: online ? (conn.opp.level | 0) : sim ? sim.level : 0, coinDelta: 0, t0: 0,
       names: online ? (function () { var a = []; a[me] = conn.myName; a[1 - me] = conn.opp.name; return a; })() : sim ? [SD.store.name(0), sim.name] : null,
       seed: online ? conn.seed : (Math.random() * 4294967296) >>> 0, skill: skill, level: lvl, hard: hard, tier: boss ? SD.progress.tier() : 0, all: [], totals: [], timers: [], raf: 0, frameFn: null, last: 0, active: [], game: null, accepting: false, onDown: null, onUp: null, ended: false, lastGame: null, tie: 0, tiebreak: false, round: 0, queue: [], series: mode === 'pay' || mode === 'party' || online, total: 0, gameNo: 0 };
@@ -402,7 +408,8 @@ SD.games = SD.games || [];
   }
 
   /* ---------- one round ---------- */
-  var DUR = { balance: 12, beat: 14, bomb: 14, dodge: 14, echo: 25, flap: 15, knife: 15, lander: 20, pinata: 8, skip: 15, snack: 15, zig: 12 };
+  /* bar length must match how long each game really runs (seconds). hop / stack / freeze draw their own bar. */
+  var DUR = { balance: 12, beat: 12, bomb: 14, dodge: 13, echo: 24, flap: 12, freeze: 19, hop: 16, knife: 22, lander: 22, pinata: 12, skip: 22, snack: 16, stack: 16, zig: 22 };
   function kb() { try { return window.matchMedia('(hover:hover) and (pointer:fine)').matches; } catch (e) { return false; } }
   function howTo(g) {
     var k = padKey(S.me), key = kb() ? 'PRESS ' + (k === 'SPACE' ? 'SPACE' : k) + ' OR TAP YOUR PAD. ' : 'TAP YOUR PAD. ';
@@ -455,8 +462,9 @@ SD.games = SD.games || [];
       later(function () {                          // a short beat after GO so nobody is caught off guard
         if (S !== SS || S.game !== G || S.ended) return;
         S.accepting = true; paintUse();
-        if (DUR[G.id]) showTimer(DUR[G.id] * 1000);
+        if (DUR[G.id] && typeof G.start === 'function') showTimer(DUR[G.id] * 1000);
         G.start(makeCtx());
+        flushRemote();
       }, 450);
     }
   }
@@ -688,7 +696,7 @@ SD.games = SD.games || [];
       $('#cereLine').textContent = rnd(ROASTS);
     }, 1750);
     later(function () { showXp(loser); }, 2300);
-    later(function () { btns.hidden = false; }, 2500);
+    var CS = S; setTimeout(function () { if (S === CS && S.inCere) btns.hidden = false; }, 2500);   // plain timer: nothing that clears match timers can hide the way out
     $('#bAgain').onclick = function () { au.sfx.select(); if (S.online) rematch(); else if (S.sim && SD.sim) startSession('pay', null, { sim: SD.sim.pick() }); else startSession(S.mode); };
     $('#bHome').onclick = function () { au.sfx.tap(); E.home(); };
     $('#bShare').onclick = function () { share(name); };
@@ -726,11 +734,21 @@ SD.games = SD.games || [];
     else if (net > 0) au.sfx.coin();
   }
 
+  function flushRemote() {
+    if (!S || !S.remoteQ) return;
+    var q = S.remoteQ; S.remoteQ = [];
+    q.forEach(function (ev) { if (ev.t === 'd') press(ev.i, true); else release(ev.i, true); });
+  }
+  function onRemote(kind) {
+    var ps = 1 - S.me;
+    if (S.accepting) { if (kind === 'd') press(ps, true); else release(ps, true); }
+    else S.remoteQ.push({ t: kind, i: ps });
+  }
   function onNet(m) {
     if (!S || !S.online || !m) return;
     var ps = 1 - S.me;
-    if (m.t === 'd') { if (S.accepting) press(ps, true); }
-    else if (m.t === 'u') { if (S.accepting) release(ps, true); }
+    if (m.t === 'd') onRemote('d');
+    else if (m.t === 'u') onRemote('u');
     else if (m.t === 'r') { S.peerRes[m.n] = m; if (S.settle && m.n === S.roundNo) S.settle(); }
     else if (m.t === 'pw') { S.peerPw[m.n] = Array.isArray(m.p) ? m.p.slice(0, 3) : []; if (S.pwWait && S.pwWait.n === m.n) S.pwWait.go(); }
     else if (m.t === 'pl') { if (m.n === S.roundNo && typeof m.id === 'string' && SD.powers.by[m.id]) { var fp = 1 - S.me; if ((S.armed[fp] || []).indexOf(m.id) >= 0) liveUse(fp, m.id, true); } }
@@ -750,7 +768,7 @@ SD.games = SD.games || [];
     }
     S.leaving = true; clearAll(); au.music.stop();
     setCenter('<div class="tie">LEFT<small>OPPONENT LEFT</small></div>', 'pop');
-    setTimeout(function () { E.home(); }, 1800);
+    setTimeout(function () { if (S && S.leaving) E.home(); }, 1800);
   }
   function rematch() {
     var o = S.online; if (o.gone) return;
@@ -794,6 +812,21 @@ SD.games = SD.games || [];
     try { navigator.clipboard.writeText(text + ' ' + url).then(done, function () {}); } catch (e) {}
   }
 
+  /* ---------- safety net: an error during a match or end screen must never leave the player stuck ---------- */
+  function rescue() {
+    if (document.getElementById('rescueBtn')) return;
+    var b = document.createElement('button'); b.id = 'rescueBtn'; b.type = 'button'; b.className = 'gel';
+    b.innerHTML = art.icon('home', 26) + '<span>HOME</span>';
+    b.addEventListener('click', function () { b.remove(); try { E.home(); } catch (e) { location.reload(); } });
+    document.body.appendChild(b);
+  }
+  function onCrash() {
+    var inGame = (arenaEl && !arenaEl.hidden) || (ceremonyEl && !ceremonyEl.hidden) || !($('#party') || {}).hidden;
+    if (inGame) setTimeout(rescue, 600);
+  }
+  window.addEventListener('error', onCrash);
+  window.addEventListener('unhandledrejection', onCrash);
+
   /* ---------- public ---------- */
   var E = {
     init: function () {
@@ -805,6 +838,7 @@ SD.games = SD.games || [];
     startOnline: function (conn) { startSession('online', conn); },
     startSim: function (sim) { startSession('pay', null, { sim: sim }); },
     home: function () {
+      var rb = document.getElementById('rescueBtn'); if (rb) rb.remove();
       if (SD.cg) SD.cg.stop();
       var tour = !!(S && S.online && S.online.kind === 'tour');
       if (tour && !S.tourEnded) { S.tourEnded = true; try { S.online.onEnd(1 - S.me); } catch (er) {} }
@@ -812,6 +846,7 @@ SD.games = SD.games || [];
       if (S && S.online && !tour) { try { S.online.peer.send({ t: 'bye' }); S.online.peer.onclose = null; S.online.peer.close(); } catch (e) {} }
       if (S) { clearAll(); if (S.game && S.game.cleanup) { try { S.game.cleanup(); } catch (e) {} } }
       S = null; stopSpeech(); art.setLive(0, null); art.setLive(1, null);  var lb = document.getElementById('leaveBox'); if (lb) lb.remove();
+      if (fx && fx.stop) fx.stop();
       arenaEl.hidden = true; ceremonyEl.hidden = true; $('#home').hidden = false;
       if (tour && SD.tour) { hideTimer(); clearCenter(); padsEl.innerHTML = ''; pads = []; $('#goText').classList.remove('on'); au.music.start('menu'); return SD.tour.back(); } if (SD.arenas) SD.arenas.leave();
       hideTimer(); clearCenter(); padsEl.innerHTML = ''; pads = [];

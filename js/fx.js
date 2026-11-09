@@ -123,5 +123,6 @@ window.SD = window.SD || {};
   }
   function vibrate(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
 
-  SD.fx = { init: init, confetti: confetti, rain: rain, burst: burst, cream: cream, popText: popText, shake: shake, flash: flash, vibrate: vibrate, center: center };
+  function stop() { parts = []; running = false; if (g) g.clearRect(0, 0, W, H); }
+  SD.fx = { init: init, confetti: confetti, rain: rain, burst: burst, cream: cream, popText: popText, shake: shake, flash: flash, vibrate: vibrate, center: center, stop: stop };
 })();

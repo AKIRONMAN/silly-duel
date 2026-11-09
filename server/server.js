@@ -76,7 +76,7 @@ function dropMatch(m) { if (!m) return; delete matches[m.mid]; [m.a, m.b].forEac
 
 /* party rooms */
 function pubRoom(r) {
-  return { code: r.code, phase: r.phase, round: r.round, rounds: r.rounds, host: r.host, champ: r.champ, size: r.size,
+  return { code: r.code, phase: r.phase, round: r.round, rounds: r.rounds, host: r.host, champ: r.champ, size: r.size, pub: !!r.pub,
     players: r.players.map(function (id) { var c = clients[id]; return c ? { id: id, name: c.name, level: c.level, skin: c.skin, out: !!r.out[id], away: !c.ws } : null; }).filter(Boolean),
     matches: r.matches.map(function (m) { return { mid: m.mid, a: m.a, b: m.b, w: m.w, s: m.s, g: m.g, bye: !!m.bye, ra: !!m.ra, rb: !!m.rb, live: !!m.live, n: m.n }; }) };
 }
@@ -180,8 +180,16 @@ function handle(c, m) {
       break; }
     case 'quickCancel': dequeue(c); break;
     case 'create': {
-      if (c.room || c.match) return; var k = code(), r = { code: k, host: c.id, players: [c.id], phase: 'lobby', round: 0, rounds: 0, matches: [], out: {}, left: {}, champ: null, size: 0 };
+      if (c.room || c.match) return; var k = code(), r = { code: k, host: c.id, players: [c.id], phase: 'lobby', round: 0, rounds: 0, matches: [], out: {}, left: {}, champ: null, size: 0, pub: !!m.pub };
       rooms[k] = r; c.room = k; bcast(r); break; }
+    case 'list': {
+      var list = [];
+      Object.keys(rooms).forEach(function (k) {
+        var r = rooms[k]; if (!r.pub || r.phase !== 'lobby') return;
+        var h = clients[r.host];
+        list.push({ code: r.code, n: r.players.length, host: h ? h.name : 'HOST', level: h ? h.level : 1 });
+      });
+      c.send({ t: 'list', rooms: list }); break; }
     case 'join': {
       if (c.room || c.match) return; var r2 = rooms[clean(m.code, 4).toUpperCase()];
       if (!r2) return c.send({ t: 'err', e: 'NO PARTY WITH THAT CODE' });

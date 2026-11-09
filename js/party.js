@@ -91,13 +91,14 @@
     show('<h2>NO SERVER FOUND</h2><div class="on-face">' + art.face(0, 'sad') + '</div><p class="on-msg">COULD NOT REACH THE GAME SERVER<small>Online play needs the Silly Duel server. See SERVER-GUIDE.txt (local wifi or internet).</small></p>' + back('OK'));
     bind('#pBack', leave);
   }
-  function open() { root.hidden = false; $('#home').hidden = true; tok++; V = null; }
+  function open() { var tap = document.getElementById('tapStart'); if (tap) tap.hidden = true; root.hidden = false; $('#home').hidden = true; tok++; V = null; }
   function leave() { tok++; clearTimeout(retry); retry = null; resuming = false; remember(''); send({ t: 'quickCancel' }); send({ t: 'leave' }); V = null; queued = false; root.hidden = true; $('#home').hidden = false; if (SD.main && SD.main.refresh) SD.main.refresh(); }
 
   /* ---------- messages ---------- */
   function onMsg(m) {
     if (m.t === 'hi') { myId = m.id; if (resuming) { resuming = false; if (!m.resumed) { V = null; lost(); } } }
     else if (m.t === 'wait') { if (queued) renderQuickWait(m.n); }
+    else if (m.t === 'list') showPublic(m.rooms);
     else if (m.t === 'err') { var e = $('#pErr'); if (e) e.textContent = m.e; else { show('<h2>PARTY</h2><p class="on-msg">' + esc(m.e) + '</p>' + back()); bind('#pBack', menu); } }
     else if (m.t === 'room') { V = m.v; remember(V.code); if (!inMatch) render(); }
     else if (m.t === 'left') { V = null; remember(''); }
@@ -137,10 +138,32 @@
     connect().then(function () { if (t !== tok) return; queued = true; send({ t: 'quick' }); renderQuickWait(0); }, function () { if (t === tok) noServer(); });
   };
   function menu() {
-    show('<h2>FRIENDS ROOM</h2><div class="on-face">' + art.face(0, 'cheer') + '</div><p class="on-note">Make a room for 2 to 10 players. Share the code or link. 2 players = a normal match. 4 or more = knockout bracket, first to 2 wins.</p>' +
-      '<button class="gel" id="pMake" type="button">' + art.icon('friend', 30) + '<span>MAKE A ROOM</span></button>' +
-      '<button class="gel alt" id="pJoin" type="button"><span>JOIN WITH A CODE</span></button>' + back());
-    bind('#pMake', function () { send({ t: 'create' }); }); bind('#pJoin', function () { joinForm(''); }); bind('#pBack', leave);
+    show('<h2>FRIENDS ROOM</h2><div class="on-face">' + art.face(0, 'cheer') + '</div><p class="on-note">Private rooms need a code. Public rooms show up for anyone looking for a party. 2 players = a match. 4 or more = knockout, first to 2 wins.</p>' +
+      '<button class="gel" id="pMake" type="button">' + art.icon('friend', 30) + '<span>PRIVATE ROOM</span></button>' +
+      '<button class="gel" id="pPub" type="button"><span>PUBLIC ROOM</span></button>' +
+      '<button class="gel alt" id="pJoin" type="button"><span>JOIN WITH A CODE</span></button>' +
+      '<button class="gel alt" id="pFind" type="button"><span>JOIN A PUBLIC PARTY</span></button>' + back());
+    bind('#pMake', function () { send({ t: 'create' }); });
+    bind('#pPub', function () { send({ t: 'create', pub: true }); });
+    bind('#pJoin', function () { joinForm(''); });
+    bind('#pFind', publicList);
+    bind('#pBack', leave);
+  }
+  function publicList() {
+    busy('PUBLIC PARTIES', 'LOOKING FOR OPEN ROOMS...');
+    send({ t: 'list' });
+  }
+  function showPublic(list) {
+    var rows = (list || []).map(function (r) {
+      return '<button class="gel alt p-open" type="button" data-code="' + esc(r.code) + '"><span>' + esc(r.host) + ' · LV ' + (r.level | 0) + ' · ' + (r.n | 0) + '/10 · ' + esc(r.code) + '</span></button>';
+    }).join('');
+    show('<h2>PUBLIC PARTIES</h2><p class="on-note">Anyone can join these while they are waiting to start.</p>' +
+      (rows || '<p class="on-msg">NO PUBLIC PARTIES RIGHT NOW<small>Make one, or try again in a moment.</small></p>') +
+      '<button class="gel" id="pAgain" type="button"><span>REFRESH</span></button>' + back());
+    Array.prototype.forEach.call(card.querySelectorAll('.p-open'), function (b) {
+      b.addEventListener('click', function () { au.sfx.tap(); send({ t: 'join', code: b.dataset.code }); });
+    });
+    bind('#pAgain', publicList); bind('#pBack', menu);
   }
   P.menu = function () {
     root = $('#party'); card = $('#partyCard'); open(); busy('FRIENDS ROOM', 'CONNECTING...'); var t = tok;
@@ -166,7 +189,7 @@
   function renderLobby() {
     var n = V.players.length, isHost = V.host === myId, okN = n >= 2 && n <= 10 && n % 2 === 0;
     var list = V.players.map(function (p) { return '<div class="tl-p' + (p.away ? ' away' : '') + '">' + face(p) + '<b>' + esc(p.name) + (p.id === V.host ? ' *' : '') + '</b>' + (p.away ? '<small>AWAY</small>' : '') + '</div>'; }).join('');
-    show('<h2>ROOM</h2><div class="t-code">' + esc(V.code) + '</div><p class="on-note">Friends: tap ROOM, JOIN WITH A CODE, and type this. Or send the invite link.</p>' +
+    show('<h2>ROOM' + (V.pub ? ' · PUBLIC' : '') + '</h2><div class="t-code">' + esc(V.code) + '</div><p class="on-note">' + (V.pub ? 'This room is public. Anyone can find it under JOIN A PUBLIC PARTY.' : 'Friends: tap ROOM, JOIN WITH A CODE, and type this. Or send the invite link.') + '</p>' +
       '<div class="tl-list">' + list + '</div><p class="on-msg tl"><small>' + n + ' / 10 PLAYERS' + (okN ? '' : n < 2 ? ' · NEED ONE MORE' : ' · NEED AN EVEN NUMBER') + '</small></p><p class="on-err" id="pErr"></p>' +
       (isHost ? '<button class="gel" id="pStart" type="button"' + (okN ? '' : ' disabled') + '><span>START' + (n >= 2 ? ' (' + n + ')' : '') + '</span></button>' : '<p class="on-msg">WAITING FOR THE HOST TO START...</p>') +
       '<button class="gel alt" id="pInv" type="button"><span>SEND INVITE</span></button>' + back('LEAVE'));
@@ -203,24 +226,40 @@
       ready = '<button class="gel" id="pReady" type="button"' + (iReady ? ' disabled' : '') + '><span>' + (iReady ? 'READY!' : 'I AM READY') + '</span></button>';
     } else line = 'YOU WON! WAITING FOR THE OTHERS...';
     // watch panel for a live match
+    var live = V.matches.filter(function (m) { return m.live; });
     var wm = V.matches.filter(function (m) { return m.mid === watchMid && m.live; })[0];
-    if (!wm && me && me.out) wm = V.matches.filter(function (m) { return m.live; })[0];
-    var watch = '';
-    if (wm && wm.a !== myId && wm.b !== myId) {
+    if (!wm && watchMid !== -1 && me && me.out && live[0]) wm = live[0];
+    if (wm && wm.a !== myId && wm.b !== myId && (watchMid === wm.mid || (watchMid !== -1 && me && me.out))) {
       var A = by[wm.a], B = by[wm.b];
-      watch = '<div class="watch" data-mid="' + wm.mid + '"><b class="wt">WATCHING LIVE' + (isFinal ? ' · FINAL' : '') + '</b><div class="wr"><div>' + face(A).replace('class="tf"', 'class="tf" data-slot="0"') + '<span>' + esc(A.name) + '</span></div><strong>' + wm.s[0] + ' - ' + wm.s[1] + '</strong><div>' + face(B).replace('class="tf"', 'class="tf" data-slot="1"') + '<span>' + esc(B.name) + '</span></div></div><small>' + esc(wm.g || 'STARTING') + '</small></div>';
+      show('<h2>WATCHING' + (isFinal ? ' THE FINAL' : '') + '</h2>' +
+        '<div class="watch big" data-mid="' + wm.mid + '"><b class="wt">' + esc(wm.g || 'LIVE MATCH') + '</b>' +
+        '<div class="wr"><div>' + face(A).replace('class="tf"', 'class="tf" data-slot="0"') + '<b>' + esc(A.name) + '</b><small>LV ' + A.level + '</small></div>' +
+        '<strong>' + wm.s[0] + ' - ' + wm.s[1] + '</strong>' +
+        '<div>' + face(B).replace('class="tf"', 'class="tf" data-slot="1"') + '<b>' + esc(B.name) + '</b><small>LV ' + B.level + '</small></div></div>' +
+        '<p class="on-note">Taps flash on each face. First to 2 wins.</p></div>' +
+        (live.length > 1 ? '<p class="on-note">Other live matches: tap one below.</p><div class="tms">' + live.filter(function (m) { return m.mid !== wm.mid; }).map(function (m) { return node(m, by); }).join('') + '</div>' : '') +
+        '<button class="gel alt" id="pWatchOff" type="button"><span>BACK TO BRACKET</span></button>' + back('LEAVE'));
+      bind('#pWatchOff', function () { watchMid = -1; renderTree(); }); bind('#pBack', leave);
+      Array.prototype.forEach.call(card.querySelectorAll('.tm.live'), function (el) { el.addEventListener('click', function () { watchMid = +el.dataset.mid; renderTree(); }); });
+      return;
     }
-    show('<h2>' + label + '</h2><p class="on-msg tl">' + line + '<small>' + alive + ' PLAYERS LEFT · FIRST TO 2 WINS</small></p>' + watch + '<div class="tms">' + V.matches.map(function (m) { return node(m, by); }).join('') + '</div>' + ready + back('LEAVE'));
+    var watchHint = (me && me.out && live.length) ? '<p class="on-note">You are out. Tap a LIVE match to watch it full screen.</p>' : '';
+    show('<h2>' + label + '</h2><p class="on-msg tl">' + line + '<small>' + alive + ' PLAYERS LEFT · FIRST TO 2 WINS</small></p>' + watchHint + '<div class="tms">' + V.matches.map(function (m) { return node(m, by); }).join('') + '</div>' + ready + back('LEAVE'));
     bind('#pReady', function () { send({ t: 'ready', mid: mine.mid }); }); bind('#pBack', leave);
     Array.prototype.forEach.call(card.querySelectorAll('.tm.live'), function (el) { el.addEventListener('click', function () { watchMid = +el.dataset.mid; renderTree(); }); });
   }
   function renderDone() {
-    var ch = null; V.players.forEach(function (p) { if (p.id === V.champ) ch = p; });
-    var me = ch && ch.id === myId;
-    show('<h2>WINNER WINNER!</h2><div class="trophy-glow"><div class="on-face big">' + art.face(0, 'win', { skin: ch ? ch.skin : 0, crown: true }) + '</div></div><p class="on-msg"><b>' + esc(ch ? ch.name : '') + '</b> WINS THE PARTY!<small>' + (me ? 'THAT IS YOU! SHARE YOUR TROPHY' : V.size + ' PLAYERS · ' + V.rounds + ' ROUNDS') + '</small></p>' +
-      (me ? '<button class="gel" id="pShare" type="button"><span>SHARE TROPHY</span></button>' : '') + back('HOME'));
-    bind('#pShare', function () { trophy(ch); }); bind('#pBack', leave);
-    try { au.sfx.cheer(); SD.fx.confetti(window.innerWidth / 2, window.innerHeight / 3, 70, 1.3); } catch (e) {}
+    try {
+      var ch = null; V.players.forEach(function (p) { if (p.id === V.champ) ch = p; });
+      var me = ch && ch.id === myId;
+      show('<h2>WINNER WINNER!</h2><div class="trophy-glow"><div class="on-face big">' + art.face(0, 'win', { skin: ch ? ch.skin : 0, crown: true }) + '</div></div><p class="on-msg"><b>' + esc(ch ? ch.name : '') + '</b> WINS THE PARTY!<small>' + (me ? 'THAT IS YOU! SHARE YOUR TROPHY' : V.size + ' PLAYERS · ' + V.rounds + ' ROUNDS') + '</small></p>' +
+        (me ? '<button class="gel" id="pShare" type="button"><span>SHARE TROPHY</span></button>' : '') + back('HOME'));
+      bind('#pShare', function () { try { trophy(ch); } catch (e) {} }); bind('#pBack', leave);
+      try { au.sfx.cheer(); if (SD.fx) SD.fx.confetti(window.innerWidth / 2, window.innerHeight / 3, 40, 1); setTimeout(function () { if (SD.fx && SD.fx.stop) SD.fx.stop(); }, 2800); } catch (e) {}
+    } catch (e) {
+      show('<h2>WINNER WINNER!</h2><p class="on-msg">THE PARTY IS OVER</p>' + back('HOME'));
+      bind('#pBack', leave);
+    }
   }
   function trophy(ch) {
     var W = 720, H = 960, c = document.createElement('canvas'); c.width = W; c.height = H; var g = c.getContext('2d');

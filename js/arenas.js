@@ -33,8 +33,8 @@
   function forLevel(L) { return LIST.filter(function (a) { return a.lvl === L; })[0] || null; }
 
   var fxEl = null;
-  function enter(arenaEl) {
-    var a = current(), b = document.body;
+  function enter(arenaEl, id) {
+    var a = (id && byId(id)) || current(), b = document.body;
     b.dataset.arena = a.id;
     b.style.setProperty('--ar-bg', a.bg); b.style.setProperty('--ar-ac', a.ac);
     if (!fxEl) { fxEl = document.createElement('div'); fxEl.className = 'arena-fx'; fxEl.setAttribute('aria-hidden', 'true'); }

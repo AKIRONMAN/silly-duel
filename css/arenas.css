@@ -27,3 +27,6 @@ body[data-arena] .pad { box-shadow: 0 7px 0 var(--ink), 0 0 0 5px var(--ar-ac), 
 .ar-card.locked { filter: brightness(.35) blur(1.5px); }
 .ar-card.sel { outline: 4px solid var(--grape); outline-offset: 2px; }
 .ar-card small { font-size: 10px; }
+.ar-card .ar-prev { position: absolute; top: 6px; right: 6px; font-size: 8px; padding: 3px 6px; border-radius: 99px; background: #fff; color: var(--ink); text-shadow: none; box-shadow: 0 2px 0 var(--ink); }
+.ar-close { position: absolute; left: 50%; bottom: calc(18px + var(--sb, 0px)); transform: translateX(-50%); z-index: 12; min-width: 220px; }
+.arena-banner.stay { animation: none; opacity: 1; top: calc(12px + var(--st, 0px)); transform: translate(-50%, 0); }
