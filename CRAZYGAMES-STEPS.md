@@ -97,7 +97,7 @@ Open the zip and confirm you see `index.html` immediately, next to `js`, `css`, 
 
 Credit on MORE → About:
 
-Developed with silliness by silly-developer [akironman](https://github.com/akironman)
+Developed with silliness by [silly-developer](https://akironman.github.io/silly-duel/silly-developer/) [akironman](https://github.com/akironman)
 
 ---
 
