@@ -635,19 +635,6 @@
     });
     bindInfo();
     $('#wdBack').addEventListener('click', closeWardrobe);
-    /* sound can only start after a tap: ask for one up front if the browser has not allowed audio yet */
-    function movie() { if (SD.intro) { au.music.start('menu'); SD.intro.play(function () { au.sfx.select(); }); } }
-    setTimeout(function () {
-      if (au.running()) { movie(); return; }
-      if (!(au.isOn('music') || au.isOn('sfx'))) return;
-      var ov = $('#tapStart'); ov.hidden = false;
-      var go = function (e) {
-        ov.hidden = true; au.unlock();
-        movie();
-        ['pointerdown', 'keydown'].forEach(function (ev) { ov.removeEventListener(ev, go); window.removeEventListener('keydown', go); });
-      };
-      ov.addEventListener('pointerdown', go); window.addEventListener('keydown', go);
-    }, 350);
     paintGamesPick($('#ofGames'));
     $('#tabLook').addEventListener('click', function () { au.sfx.tap(); showWdTab('look'); });
     $('#tabAv').addEventListener('click', function () { au.sfx.tap(); showWdTab('av'); });
@@ -663,6 +650,36 @@
       if (ni && !ni.readOnly) { if (st.setName(wdSlot, ni.value) && wdSlot === 0 && SD.net) SD.net.sync(); }
       if (SD.lobby && SD.lobby.open) SD.lobby.open();
     });
+    function hideBoot(then) {
+      var el = document.getElementById('boot');
+      var t0 = Date.now();
+      function go() {
+        var wait = Math.max(0, 700 - (Date.now() - t0));
+        setTimeout(function () {
+          if (!el) { if (then) then(); return; }
+          el.classList.add('out');
+          setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); if (then) then(); }, 420);
+        }, wait);
+      }
+      var fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+      var done = false;
+      function once() { if (done) return; done = true; requestAnimationFrame(function () { requestAnimationFrame(go); }); }
+      fonts.then(once, once);
+      setTimeout(once, 2200);
+    }
+    function afterPaint() {
+      function movie() { if (SD.intro) { au.music.start('menu'); SD.intro.play(function () { au.sfx.select(); }); } }
+      if (au.running()) { movie(); return; }
+      if (!(au.isOn('music') || au.isOn('sfx'))) return;
+      var ov = $('#tapStart'); ov.hidden = false;
+      var go = function () {
+        ov.hidden = true; au.unlock();
+        movie();
+        ov.removeEventListener('pointerdown', go); window.removeEventListener('keydown', go);
+      };
+      ov.addEventListener('pointerdown', go); window.addEventListener('keydown', go);
+    }
+    hideBoot(afterPaint);
     SD.engine.home();
     if (SD.ads && SD.ads.init) SD.ads.init();
     if (CG && SD.cg) SD.cg.init().then(function () { refresh(); if (SD.ads) SD.ads.ready(); if (SD.ads && SD.ads.showHomeBanner) SD.ads.showHomeBanner(); });
