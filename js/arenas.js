@@ -26,8 +26,8 @@
   }
   function newest(L) { var r = LIST[0]; LIST.forEach(function (a) { if (a.lvl <= L && owned(a)) r = a; }); return r; }
   function byId(id) { for (var i = 0; i < LIST.length; i++) if (LIST[i].id === id) return LIST[i]; return null; }
-  function pinned() { try { return localStorage.getItem('sd_arena'); } catch (e) { return null; } }
-  function pin(id) { try { if (id) localStorage.setItem('sd_arena', id); else localStorage.removeItem('sd_arena'); } catch (e) {} }
+  function pinned() { return (SD.store.extraGet && SD.store.extraGet('sd_arena')) || null; }
+  function pin(id) { if (SD.store.extraSet) SD.store.extraSet('sd_arena', id || null); }
   var forced = null;
   function current() { if (forced) return newest(forced); var p = byId(pinned()); return p && owned(p) ? p : newest(lvl()); }
   function forLevel(L) { return LIST.filter(function (a) { return a.lvl === L; })[0] || null; }

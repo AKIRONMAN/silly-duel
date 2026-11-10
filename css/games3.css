@@ -61,4 +61,4 @@
 .ln-fuel i, .ln-spd i { display: block; width: 100%; background: #ffd84d; }
 .ln-spd i.ok { background: #76e6a8; } .ln-spd i.bad { background: #ff4d6d; }
 .ln-ship.high::after { content: '\25B2'; position: absolute; top: -18px; left: 50%; translate: -50% 0; color: #fff; font-size: 13px; }
-.pw-tab { letter-spacing: -.2px; }
+.pw-tab { letter-spacing: 0; }

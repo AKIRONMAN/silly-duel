@@ -14,7 +14,13 @@ On a phone, each player taps their own colored pad.
 
 ---
 
-## Put it online for free (GitHub Pages)
+## Put it online (recommended)
+
+Host the **game** on Firebase (free CDN). Keep **MATCH / ROOM / PARTY** on the $7 Render server only. Full steps: **DEPLOY.md**.
+
+Players open `https://silly-duel.web.app`. They never load the game from Render.
+
+## Put it online for free (GitHub Pages, optional)
 
 1. Create a new repository on GitHub, for example `silly-duel`.
 2. Upload everything from this folder (keep the folders `css`, `js`, `assets` as they are). The file `index.html` must be at the top level.

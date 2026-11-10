@@ -1,10 +1,11 @@
 /* Offline cache. Bump VERSION whenever you upload a new build so players get the update. */
-var VERSION = 'silly-duel-v44';
+var VERSION = 'silly-duel-v91';
 var FILES = [
-  './', './index.html', './manifest.webmanifest', './css/style.css', './css/games2.css', './css/games3.css',
+  './', './index.html', './manifest.webmanifest', './css/style.css', './css/games2.css', './css/games3.css', './css/arenas.css', './css/skins.css', './css/dock.css', './css/party.css', './css/intro.css',
   './assets/fonts/Fredoka.ttf', './assets/fonts/Silkscreen-Regular.ttf', './assets/fonts/Silkscreen-Bold.ttf', './js/build.js', './js/powers.js', './js/storage.js', './js/fit.js', './js/firebase-config.js', './js/art.js', './js/progress.js', './js/audio.js', './js/fx.js', './js/engine.js',
-  './js/games/freeze.js', './js/games/dodge.js', './js/games/beat.js', './js/games/pinata.js', './js/games/bomb.js', './js/games/flap.js', './js/games/hop.js', './js/games/stack.js', './js/games/balance.js', './js/games/snack.js', './js/games/knife.js', './js/games/zigzag.js', './js/games/skip.js', './js/games/echo.js', './js/games/lander.js', './js/games/boss.js', './js/pools.js', './js/net.js', './js/lobby.js', './js/server-config.js', './js/party.js', './css/party.css',
-  './js/main.js', './assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png'
+  './js/games/freeze.js', './js/games/dodge.js', './js/games/beat.js', './js/games/pinata.js', './js/games/bomb.js', './js/games/flap.js', './js/games/hop.js', './js/games/stack.js', './js/games/balance.js', './js/games/snack.js', './js/games/knife.js', './js/games/zigzag.js', './js/games/skip.js', './js/games/echo.js', './js/games/lander.js', './js/games/boss.js', './js/pools.js', './js/arenas.js', './js/net.js', './js/lobby.js', './js/server-config.js', './js/party.js',
+  './js/main.js', './js/intro.js', './js/ads-config.js', './js/ads.js', './assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png',
+  './screens/powers.html', './screens/arenas.html', './screens/home.html', './screens/home-foot.html'
 ];
 
 self.addEventListener('install', function (e) {

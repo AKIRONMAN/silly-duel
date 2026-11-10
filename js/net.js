@@ -60,12 +60,28 @@ window.SD = window.SD || {};
     google: function () {
       var prov = new FB.a.GoogleAuthProvider();
       prov.setCustomParameters({ prompt: 'select_account' });
+      var u = FB.auth.currentUser;
+      if (u && u.isAnonymous && FB.a.linkWithPopup) {
+        return FB.a.linkWithPopup(u, prov).then(me, function (e) {
+          var c = (e && e.code) || '';
+          if (/credential-already-in-use|email-already-in-use|provider-already-linked/.test(c)) {
+            return FB.a.signInWithPopup(FB.auth, prov).then(me);
+          }
+          throw e;
+        });
+      }
       return FB.a.signInWithPopup(FB.auth, prov).then(me);
     },
     logout: function () { return FB.a.signOut(FB.auth); },
     /* private full save (only the owner can read it) */
-    loadSave: function () { return FB.f.getDoc(ref('saves/' + FB.auth.currentUser.uid)).then(function (s) { return s.exists() ? s.data() : null; }); },
-    putSave: function (text, ts) { return FB.f.setDoc(ref('saves/' + FB.auth.currentUser.uid), { d: text, ts: ts }); },
+    loadSave: function (uid) {
+      var me = FB.auth.currentUser;
+      if (!me) return Promise.reject({ code: 'no-auth' });
+      var id = me.uid;
+      if (uid && uid !== me.uid) id = me.uid;
+      return FB.f.getDoc(ref('saves/' + id)).then(function (s) { return s.exists() ? s.data() : null; });
+    },
+    putSave: function (pack) { return FB.f.setDoc(ref('saves/' + FB.auth.currentUser.uid), pack); },
     /* removes the save, the Top 100 entry and the Google login itself */
     deleteAccount: function () {
       var u = FB.auth.currentUser, uid = u.uid;
@@ -106,6 +122,13 @@ window.SD = window.SD || {};
     roomWatch: function (id, cb) { return FB.f.onSnapshot(ref('rooms/' + id), function (s) { cb(s.exists() ? s.data() : null); }); },
     roomSet: function (id, patch) { return FB.f.updateDoc(ref('rooms/' + id), patch); },
     iceAdd: function (id, side, c) { return FB.f.addDoc(coll('rooms/' + id + '/ice'), { side: side, c: c }); },
+    sendFeedback: function (msg, stars) {
+      var u = FB.auth.currentUser;
+      if (!u) return Promise.reject({ code: 'no-auth' });
+      var name = String(st.name(0) || 'GUEST').slice(0, 14);
+      if (!name) name = 'GUEST';
+      return FB.f.addDoc(coll('feedback'), { uid: u.uid, name: name, msg: msg, stars: stars | 0, ts: Date.now() });
+    },
     iceWatch: function (id, side, cb) {
       return FB.f.onSnapshot(coll('rooms/' + id + '/ice'), function (snap) {
         snap.docChanges().forEach(function (ch) { if (ch.type === 'added' && ch.doc.data().side === side) cb(ch.doc.data().c); });
@@ -173,13 +196,13 @@ window.SD = window.SD || {};
   /* ---------- finding a partner ---------- */
   function myInfo() {
     var u = N.backend.user();
-    return { uid: u.uid, name: u.name, level: st.get('level') | 0 || 1, skin: st.get('skins')[0] | 0 };
+    return { uid: u.uid, name: u.name, level: st.get('level') | 0 || 1, skin: st.get('skins')[0] | 0, tint: (st.get('tints') || [0])[0] | 0 };
   }
 
   function hostWait(job, id, info, ms, lobby) {
     var B = N.backend;
     return B.roomCreate(id, info).then(function () {
-      if (lobby) B.lobbyPut({ uid: info.uid, name: info.name, level: info.level, skin: info.skin, room: id, ts: Date.now() });
+      if (lobby) B.lobbyPut({ uid: info.uid, name: info.name, level: info.level, skin: info.skin, tint: info.tint | 0, room: id, ts: Date.now() });
       return new Promise(function (res, rej) {
         var un = null, ended = false, t;
         function end(delRoom) {
@@ -203,7 +226,7 @@ window.SD = window.SD || {};
     if (job.cancelled) return Promise.reject({ code: 'CANCEL' });
     return peerConnect(found.role, found.id, 15000).then(function (peer) {
       if (found.role === 'host') B.roomDelete(found.id);
-      var conn = { peer: peer, role: found.role, id: found.id, opp: found.opp, myName: myName, againMe: false, againPeer: false };
+      var conn = { peer: peer, role: found.role, id: found.id, you: myInfo(), opp: found.opp, myName: myName, againMe: false, againPeer: false };
       if (found.role === 'host') {
         conn.seed = (Math.random() * 4294967296) >>> 0;
         peer.send({ t: 'start', seed: conn.seed });
@@ -226,7 +249,7 @@ window.SD = window.SD || {};
       document.head.appendChild(s);
     });
   }
-  function localInfo() { return { uid: 'local', name: st.name(0), level: st.get('level') | 0 || 1, skin: st.get('skins')[0] | 0 }; }
+  function localInfo() { return { uid: 'local', name: st.name(0), level: st.get('level') | 0 || 1, skin: st.get('skins')[0] | 0, tint: (st.get('tints') || [0])[0] | 0 }; }
   function wrapConn(conn, pr) {
     var handler = null, q = [], closed = false;
     var peer = {
@@ -258,7 +281,7 @@ window.SD = window.SD || {};
               var peer = wrapConn(c, me);
               peer.onmessage = function (m) {
                 if (!m || m.t !== 'hi') return;
-                var conn = { peer: peer, role: 'host', id: code, opp: m.info, myName: info.name, againMe: false, againPeer: false, seed: (Math.random() * 4294967296) >>> 0 };
+                var conn = { peer: peer, role: 'host', id: code, you: info, opp: m.info, myName: info.name, againMe: false, againPeer: false, seed: (Math.random() * 4294967296) >>> 0 };
                 peer.send({ t: 'hi', info: info }); peer.send({ t: 'start', seed: conn.seed });
                 res(conn);
               };
@@ -285,7 +308,7 @@ window.SD = window.SD || {};
             peer.onmessage = function (m) {
               if (!m) return;
               if (m.t === 'hi') opp = m.info;
-              else if (m.t === 'start') { clearTimeout(tm); res({ peer: peer, role: 'guest', id: code, opp: opp || { name: 'FRIEND', level: 1, skin: 1 }, myName: info.name, seed: m.seed, againMe: false, againPeer: false }); }
+              else if (m.t === 'start') { clearTimeout(tm); res({ peer: peer, role: 'guest', id: code, you: info, opp: opp || { name: 'FRIEND', level: 1, skin: 1, tint: 0 }, myName: info.name, seed: m.seed, againMe: false, againPeer: false }); }
             };
           });
         });
@@ -346,58 +369,99 @@ window.SD = window.SD || {};
       }).then(function (c) { c.kind = 'room'; return c; });
     },
 
-    /* ---------- Google account: the whole save follows the login ---------- */
+    /* ---------- Google account + guest cloud save ---------- */
     signedIn: signedIn,
     status: function () { return syncState; },
-    /* on page load: restore a remembered login and bring the newest save onto this phone */
+    /* on page load: guest or Google session, then the cloud save is the source of truth */
     boot: function () {
-      if (!configured() || !st.get('acct')) return Promise.resolve(false);
-      return fb.start().then(function (u) {
-        if (!u || u.anon || u.uid !== st.get('acct')) { st.quiet('acct', ''); return false; }
-        return pull(false);
-      }).catch(function () { return false; });
+      if (!configured()) return Promise.resolve(false);
+      return load().then(function () { return FB.auth.authStateReady ? FB.auth.authStateReady() : null; })
+        .then(function () {
+          var u = FB.auth.currentUser;
+          if (u && !u.isAnonymous) { remember(u); return pull(false); }
+          if (u && u.isAnonymous) { remember(u); return pull(false); }
+          return FB.a.signInAnonymously(FB.auth).then(function () { remember(FB.auth.currentUser); return pull(true); });
+        }).catch(function () { return false; });
     },
     signIn: function () {
-      var popup = FB ? fb.google() : fb.start().then(fb.google);   // open the popup straight from the tap when Firebase is ready, or Safari blocks it
+      var popup = FB ? fb.google() : load().then(fb.google);
       return popup.then(function (u) {
         if (st.get('acct') !== u.uid) st.quiet('cloudTs', 0);
-        st.quiet('acct', u.uid);
+        remember(u);
         return pull(true);
       });
     },
-    /* save now (TOP 100 entry + private save). Safe to call any time. */
+    /* save now (private structured save; TOP 100 only for Google). Safe to call any time. */
     sync: function () {
       clearTimeout(syncTimer); syncTimer = 0;
-      if (!signedIn()) return Promise.resolve();
-      var ts = Date.now(), lv = Math.max(1, Math.min(200, st.get('level') | 0));
+      if (!clouded()) return Promise.resolve();
+      var pack = st.packCloud(), lv = pack.level;
       syncState = 'saving';
-      return Promise.all([
-        fb.putSave(st.dump(), ts),
-        fb.saveProfile({ name: st.name(0).slice(0, 14), level: lv, skin: st.get('skins')[0] | 0, owins: st.get('owins') | 0, ts: ts })
-      ]).then(function () { st.quiet('cloudTs', ts); syncState = 'saved'; }, function () { syncState = 'error'; });
+      var jobs = [fb.putSave(pack)];
+      if (signedIn()) {
+        jobs.push(fb.saveProfile({ name: pack.name, level: lv, skin: st.get('skins')[0] | 0, tint: (st.get('tints') || [0])[0] | 0, owins: pack.owins, ts: pack.ts }));
+      }
+      return Promise.all(jobs).then(function () { st.quiet('cloudTs', pack.ts); syncState = 'saved'; }, function () {
+        return fb.loadSave().then(function (s) {
+          takeCloud(s);
+          syncState = 'error';
+        }, function () { syncState = 'error'; });
+      });
     },
     logout: function () {
-      return N.sync().then(fb.logout).then(function () { st.quiet('acct', ''); st.quiet('cloudTs', 0); st.reset(); });
+      return N.sync().then(fb.logout).then(function () {
+        st.quiet('acct', ''); st.quiet('cloudTs', 0); st.setUid(''); st.reset();
+        return FB.a.signInAnonymously(FB.auth).then(function () { remember(FB.auth.currentUser); return N.sync(); });
+      });
     },
     deleteAccount: function () {
       clearTimeout(syncTimer); syncTimer = 0;
-      return fb.deleteAccount().then(function () { st.quiet('acct', ''); st.quiet('cloudTs', 0); st.reset(); });
+      return fb.deleteAccount().then(function () {
+        st.quiet('acct', ''); st.quiet('cloudTs', 0); st.setUid(''); st.reset();
+        return FB.a.signInAnonymously(FB.auth).then(function () { remember(FB.auth.currentUser); });
+      });
+    },
+    sendFeedback: function (msg, stars) {
+      msg = String(msg || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim();
+      stars = stars | 0;
+      if (stars < 1 || stars > 5) return Promise.reject({ code: 'stars' });
+      if (msg.length > 400) msg = msg.slice(0, 400);
+      if (!configured()) return Promise.reject({ code: 'offline' });
+      return load().then(function () {
+        if (!FB.auth.currentUser) return FB.a.signInAnonymously(FB.auth).then(function () { remember(FB.auth.currentUser); });
+      }).then(function () { return fb.sendFeedback(msg, stars); });
     }
   };
 
   var syncTimer = 0, syncState = 'saved';
   function signedIn() { var u = FB && FB.auth.currentUser; return !!(u && !u.isAnonymous && u.uid === st.get('acct')); }
-  /* newest copy wins: the cloud save if it changed since this phone last saved, otherwise this phone.
-     First sign-in: an existing account save replaces the phone, a new account keeps the guest progress. */
+  function clouded() { return !!(FB && FB.auth && FB.auth.currentUser); }
+  function remember(u) {
+    if (!u) return;
+    st.setUid(u.uid);
+    if (!u.isAnonymous) st.quiet('acct', u.uid);
+  }
+  function takeCloud(s) {
+    if (!s) return false;
+    if (typeof s.level === 'number' && st.applyCloud(s)) { st.quiet('cloudTs', s.ts | 0); syncState = 'saved'; return true; }
+    if (typeof s.d === 'string' && st.load(s.d)) { st.quiet('cloudTs', s.ts | 0); return true; }
+    return false;
+  }
+  /* Cloud wins while online. A localStorage edit is dropped on the next pull.
+     First cloud create must be a starter save; a boosted local file is reset. */
   function pull(first) {
-    return fb.loadSave().then(function (s) {
-      var cloudNewer = s && typeof s.d === 'string' && (first || (s.ts | 0) > (st.get('cloudTs') | 0));
-      if (cloudNewer && st.load(s.d)) { st.quiet('cloudTs', s.ts | 0); syncState = 'saved'; return N.sync().then(function () { return true; }); }
+    return fb.loadSave(st.uid()).then(function (s) {
+      if (s && (typeof s.level === 'number' || typeof s.d === 'string')) {
+        takeCloud(s);
+        if (s.d && typeof s.level !== 'number') return N.sync().then(function () { return true; });
+        return true;
+      }
+      if (first && st.boosted()) st.reset();
       return N.sync().then(function () { return false; });
     });
   }
   st.onChange(function () {
-    if (!signedIn()) return;
+    if (!clouded()) return;
     syncState = 'saving';
     clearTimeout(syncTimer); syncTimer = setTimeout(N.sync, 2500);
   });

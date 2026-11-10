@@ -6,16 +6,18 @@
 <title>Silly Duel</title>
 <meta name="description" content="Quick silly games to decide who pays the bill. A 2 player duel with skins and levels.">
 <meta name="theme-color" content="#ffd9ec">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://www.gstatic.com https://www.googleapis.com https://apis.google.com https://unpkg.com https://pagead2.googlesyndication.com https://www.googletagservices.com https://tpc.googlesyndication.com https://www.google.com https://googleads.g.doubleclick.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.google.com https://*.firebaseio.com wss://*.firebaseio.com wss://*.googleapis.com https://*.firebaseapp.com https://unpkg.com https://*.peerjs.com wss://*.peerjs.com wss://silly-duel.onrender.com https://silly-duel.onrender.com https://*.googlesyndication.com https://*.doubleclick.net https://*.googleadservices.com; frame-src https://accounts.google.com https://silly-duel.firebaseapp.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://pagead2.googlesyndication.com https://www.google.com https://*.doubleclick.net;">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icon-192.png">
-<link rel="stylesheet" href="css/style.css">
-<link rel="stylesheet" href="css/games2.css">
-<link rel="stylesheet" href="css/games3.css">
+<link rel="stylesheet" href="css/style.css?v=80">
+<link rel="stylesheet" href="css/games2.css?v=63">
+<link rel="stylesheet" href="css/games3.css?v=63">
   <link rel="stylesheet" href="css/arenas.css">
-  <link rel="stylesheet" href="css/dock.css">
+  <link rel="stylesheet" href="css/dock.css?v=63">
   <link rel="stylesheet" href="css/skins.css">
   <link rel="stylesheet" href="css/party.css">
+<link rel="stylesheet" href="css/intro.css?v=70">
 </head>
 <body>
 <div id="app">
@@ -23,17 +25,27 @@
 
   <main id="home" class="screen">
     <div class="topbar">
-      <div class="coin-chip" id="coinChip" aria-label="Coins"></div>
+      <h1 class="logo" aria-label="Silly Duel"><span>SILLY</span><span>DUEL</span></h1>
       <button class="icon-btn" id="btnMusic" type="button" aria-label="Music" aria-pressed="true"></button>
       <button class="icon-btn" id="btnSfx" type="button" aria-label="Sound effects" aria-pressed="true"></button>
-      <button class="icon-btn" id="btnVoice" type="button" aria-label="Funny voice" aria-pressed="true"></button>
-      <button class="icon-btn" id="btnSettings" type="button" aria-label="Control settings"></button>
+      <button class="icon-btn" id="btnMore" type="button" aria-label="More"></button>
     </div>
-    <h1 class="logo" aria-label="Silly Duel"><span>SILLY</span><span>DUEL</span></h1>
-    <div class="duel" id="duel"></div>
-    <div id="bossWrap"></div>
-    <div class="modes" id="modes"></div>
-    <p class="foot">2 players · one phone</p>
+    <div class="home-mid">
+      <div class="duel" id="duel"></div>
+      <div id="bossWrap"></div>
+      <div class="modes" id="modes">
+        <div class="mode-grid">
+          <button class="gel mode pay offline wide" type="button" data-mode="pay"><span class="mode-ico" data-icon="offline"></span><span>PLAY</span></button>
+          <button class="gel mode online" type="button" data-mode="quick"><span class="mode-ico" data-icon="globe"></span><span>MATCH</span></button>
+          <button class="gel mode invite" type="button" data-mode="room"><span class="mode-ico" data-icon="friend"></span><span>ROOM</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="home-foot mode-row2" id="modeRow2">
+      <button class="gel mode-pw" type="button" id="btnPowers"><span class="mode-ico" data-icon="zap" data-sz="26"></span><span>POWERS</span></button>
+      <button class="gel mode-pw" type="button" id="btnArena"><span class="mode-ico" data-icon="spark" data-sz="26"></span><span>ARENAS</span></button>
+      <button class="gel mode-board" type="button" id="btnBoard"><span class="mode-ico" data-icon="cup" data-sz="26"></span><span>TOP 100</span></button>
+    </div>
   </main>
 
   <main id="arena" class="screen" hidden data-count="2">
@@ -50,65 +62,142 @@
       <div class="cere-stage" id="cereStage"></div>
       <p id="cereLine"></p>
       <div id="cereXp" class="cere-xp"></div>
+      <div id="cereRate" class="cere-rate" hidden></div>
       <div class="cere-btns" id="cereBtns" hidden></div>
     </div>
   </section>
 
   <section id="offline" class="screen" hidden aria-label="Offline play">
     <div class="wd-card of-card">
-      <h2>OFFLINE PLAY</h2>
+      <div class="page-head">
+        <button class="icon-btn pg-back" id="ofBack" type="button" aria-label="Back"></button>
+        <h2>OFFLINE PLAY</h2>
+      </div>
       <div class="of-row" id="ofRow"></div>
       <div class="opp" id="ofOpp" role="radiogroup" aria-label="Player 2"></div>
       <p class="on-note">Tap a face or name to change it. Tap KEY to pick the key for that player.</p>
+      <b class="wd-sec">GAMES</b>
+      <div class="games-pick" id="ofGames" role="radiogroup" aria-label="How many games"></div>
       <button class="gel" id="ofGo" type="button"><span>START</span></button>
-      <button class="gel alt" id="ofBack" type="button"><span>BACK</span></button>
     </div>
   </section>
 
   <section id="arenas" class="screen" hidden aria-label="Arenas">
     <div class="wd-card pw-card-wrap">
-      <h2>PLAY ROOMS</h2>
-      <p class="on-note" id="arNote"></p>
+      <div class="page-head">
+        <button class="icon-btn pg-back" id="arBack" type="button" aria-label="Back"></button>
+        <h2>ARENAS</h2>
+      </div>
+      <div class="pw-coins" id="arCoins"></div>
       <div class="ar-grid" id="arGrid"></div>
-      <button class="gel" id="arDone" type="button">DONE</button>
+    </div>
+  </section>
+
+  <section id="info" class="screen" hidden aria-label="More">
+    <div class="wd-card pw-card-wrap">
+      <div class="page-head">
+        <button class="icon-btn pg-back" id="infoBack" type="button" aria-label="Back"></button>
+        <h2>MORE</h2>
+      </div>
+      <div class="pw-tabs info-tabs" id="infoTabs" role="tablist">
+        <button class="pw-tab on" type="button" data-tab="about">ABOUT</button>
+        <button class="pw-tab" type="button" data-tab="terms">TERMS</button>
+        <button class="pw-tab" type="button" data-tab="help">HELP</button>
+        <button class="pw-tab" type="button" data-tab="feed">FEEDBACK</button>
+      </div>
+      <div class="info-pane" id="infoAbout">
+        <div class="info-copy">
+          <p>Silly Duel is a two-player party of tiny games. Play on one phone, or go online with a friend.</p>
+          <p>Win pies, earn coins, buy looks, power-ups and play rooms. First to the match score wins. Then someone pays the bill. Or not. We do not mind.</p>
+          <p>Made for friends, siblings and anyone who laughs when a pie hits a face.</p>
+          <p class="info-credit">Developed with silliness by silly-developer <a class="info-gh" href="https://github.com/akironman" target="_blank" rel="noopener noreferrer">akironman</a></p>
+        </div>
+      </div>
+      <div class="info-pane" id="infoTerms" hidden>
+        <div class="info-copy">
+          <p>Play fair. Do not harass other players. Room codes are for people you invite.</p>
+          <p>Guest progress is saved to the cloud for this phone. Sign in with Google to keep it on every phone and join TOP 100. We store your game name, level, coins and items. Your email is never shown.</p>
+          <p>You can log out or delete your account in PROFILE. Deleting removes your save and TOP 100 row. Mini-games are for fun. Do not play while driving or in an unsafe place.</p>
+        </div>
+      </div>
+      <div class="info-pane" id="infoHelp" hidden>
+        <div class="info-copy">
+          <p><b>PLAY</b> — you and a friend (or a bot) on this phone.</p>
+          <p><b>MATCH</b> — find a random online player. Rated. Level and coins only change here.</p>
+          <p><b>ROOM</b> — private or public party. Share the 4-letter code.</p>
+          <p><b>POWERS / ARENAS</b> — buy with coins when your level is high enough.</p>
+          <p>Tap the face or name to change your look. Sign in to keep it. Tap MORE any time for this help.</p>
+        </div>
+      </div>
+      <div class="info-pane" id="infoFeed" hidden>
+        <div class="info-copy">
+          <p>Tell us a bug, a funny idea, or what to add next.</p>
+        </div>
+        <p class="wd-label" id="fbStarLabel">HOW HAPPY?</p>
+        <div class="fb-stars" id="fbStars" role="radiogroup" aria-labelledby="fbStarLabel"></div>
+        <p class="fb-mood" id="fbMood"></p>
+        <label class="wd-label" for="fbMsg">YOUR NOTE</label>
+        <textarea id="fbMsg" class="on-in info-msg" maxlength="400" rows="4" placeholder="TYPE HERE"></textarea>
+        <p class="on-err" id="fbErr"></p>
+        <button class="gel" id="fbSend" type="button"><span>SEND</span></button>
+      </div>
     </div>
   </section>
 
   <section id="powers" class="screen" hidden aria-label="Power-ups">
     <div class="wd-card pw-card-wrap">
-      <h2>POWER-UPS</h2>
+      <div class="page-head">
+        <button class="icon-btn pg-back" id="pwBack" type="button" aria-label="Back"></button>
+        <h2>POWER-UPS</h2>
+      </div>
       <div class="pw-coins" id="pwCoins"></div>
       <p class="on-note" id="pwNote"></p>
       <div class="pw-grid" id="pwGrid"></div>
-      <button class="gel" id="pwDone" type="button"><span>DONE</span></button>
     </div>
   </section>
 
   <div id="pick" hidden></div>
 
-  <section id="settings" class="screen" hidden aria-label="Settings">
-    <div class="wd-card st-card">
-      <h2>MY CONTROLS</h2>
-      <p class="on-note">Where should your side of the screen be?</p>
-      <div class="st-group"><b>KEYS (PLAYER 1 / PLAYER 2)</b><div class="st-opts" id="stK"></div></div>
-      <div class="st-group"><b>PHONE, UPRIGHT</b><div class="st-opts" id="stV"></div></div>
-      <div class="st-group"><b>SIDEWAYS OR DESKTOP</b><div class="st-opts" id="stH"></div></div>
-      <button class="gel alt" id="stAccount" type="button"><span>ACCOUNT / SIGN IN</span></button>
-      <button class="gel" id="stDone" type="button">DONE</button>
-    </div>
-  </section>
-
-  <section id="wardrobe" class="screen" hidden aria-label="Pick a look">
-    <div class="wd-card">
-      <h2 id="wdTitle">PICK A LOOK</h2>
-      <div class="wd-preview" id="wdPrev"></div>
-      <div class="wd-name" id="wdName"></div>
-      <label class="wd-label" for="wdNameIn">NAME</label>
-      <input id="wdNameIn" class="on-in wd-in" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false">
-      <p class="on-note" id="wdNameNote"></p>
-      <div class="wd-grid" id="wdGrid"></div>
-      <div class="wd-buyrow" id="wdBuy"></div>
-      <button class="gel" id="wdDone" type="button">DONE</button>
+  <section id="wardrobe" class="screen" hidden aria-label="Profile">
+    <div class="wd-card pw-card-wrap">
+      <div class="page-head">
+        <button class="icon-btn pg-back" id="wdBack" type="button" aria-label="Back"></button>
+        <h2 id="wdTitle" hidden>PROFILE</h2>
+      </div>
+      <div class="pw-tabs wd-tabs" id="wdTabs">
+        <button class="pw-tab on" id="tabLook" type="button">PROFILE</button>
+        <button class="pw-tab" id="tabAv" type="button">AVATAR</button>
+        <button class="pw-tab" id="tabCtrl" type="button">CONTROLS</button>
+      </div>
+      <div class="wd-pane" id="wdLook">
+        <div class="wd-top-row" id="wdTopRow">
+          <div class="duel-stats wd-top-stats big" id="wdStats"></div>
+        </div>
+        <div class="wd-preview" id="wdPrev"></div>
+        <div class="wd-name" id="wdName"></div>
+        <p class="wd-lock" id="wdLock" hidden></p>
+        <div class="wd-colors" id="wdColors" role="listbox" aria-label="Color"></div>
+        <label class="wd-label" for="wdNameIn">NAME</label>
+        <input id="wdNameIn" class="on-in wd-in" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <button class="gel wd-signin" id="wdSignIn" type="button"><span>SIGN IN</span></button>
+        <p class="on-note" id="wdSaveNote">Your details are not saved. Sign in to save them on every phone.</p>
+        <p class="on-note" id="wdNameNote"></p>
+      </div>
+      <div class="wd-pane" id="wdAvatars" hidden>
+        <div class="wd-preview" id="wdPrevAv"></div>
+        <div class="wd-name" id="wdNameAv"></div>
+        <p class="wd-lock" id="wdLockAv" hidden></p>
+        <div class="pw-grid" id="wdScroll">
+          <div class="wd-grid" id="wdGrid"></div>
+        </div>
+        <div class="wd-buyrow" id="wdBuy"></div>
+      </div>
+      <div class="wd-pane" id="wdControls" hidden>
+        <p class="on-note">Where should your side of the screen be?</p>
+        <div class="st-group"><b>KEYS (PLAYER 1 / PLAYER 2)</b><div class="st-opts" id="stK"></div></div>
+        <div class="st-group"><b>PHONE, UPRIGHT</b><div class="st-opts" id="stV"></div></div>
+        <div class="st-group"><b>SIDEWAYS OR DESKTOP</b><div class="st-opts" id="stH"></div></div>
+      </div>
     </div>
   </section>
 
@@ -123,21 +212,34 @@
   </section>
 
   <div id="tapStart" hidden><button class="gel" id="tapBtn" type="button"><span>TAP TO PLAY</span></button><p>SOUND ON</p></div>
+  <div id="ask" hidden>
+    <div class="ask-card">
+      <h2 id="askTitle">LEAVE?</h2>
+      <p class="on-msg" id="askMsg"></p>
+      <button class="gel" id="askNo" type="button"><span>KEEP WAITING</span></button>
+      <button class="gel alt" id="askYes" type="button"><span>LEAVE</span></button>
+    </div>
+  </div>
 
   <canvas id="fx" aria-hidden="true"></canvas>
   <div id="flash" aria-hidden="true"></div>
+  <div class="ad-slot ad-bar" id="adBar" hidden></div>
+  <div id="adVeil" hidden aria-hidden="true">
+    <p class="ad-veil-t">ONE SEC</p>
+    <p class="ad-veil-s">A tiny break. Back to the duel in a moment.</p>
+  </div>
 </div>
 
 <script src="js/build.js"></script>
-<script src="js/storage.js"></script>
-<script src="js/fit.js"></script>
+<script src="js/storage.js?v=63"></script>
+<script src="js/fit.js?v=53"></script>
 <script src="js/firebase-config.js"></script>
-<script src="js/art.js"></script>
+<script src="js/art.js?v=65"></script>
 <script src="js/progress.js"></script>
-<script src="js/powers.js"></script>
+<script src="js/powers.js?v=62"></script>
 <script src="js/audio.js"></script>
 <script src="js/fx.js"></script>
-<script src="js/engine.js"></script>
+<script src="js/engine.js?v=65"></script>
 <script src="js/games/freeze.js"></script>
 <script src="js/games/dodge.js"></script>
 <script src="js/games/beat.js"></script>
@@ -156,10 +258,13 @@
 <script src="js/games/boss.js"></script>
 <script src="js/pools.js"></script>
   <script src="js/arenas.js"></script>
-<script src="js/net.js"></script>
-<script src="js/lobby.js"></script>
+<script src="js/net.js?v=65"></script>
+<script src="js/lobby.js?v=61"></script>
 <script src="js/server-config.js"></script>
-<script src="js/party.js"></script>
-<script src="js/main.js"></script>
+<script src="js/party.js?v=65"></script>
+<script src="js/intro.js?v=71"></script>
+<script src="js/ads-config.js"></script>
+<script src="js/ads.js?v=3"></script>
+<script src="js/main.js?v=72"></script>
 </body>
 </html>

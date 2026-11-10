@@ -13,6 +13,7 @@ SD.games = SD.games || [];
 
   var ROASTS = ['Pie suits you.', 'Dessert is served.', 'Wallet out!', 'So tasty. So sad.', 'Nice try!', 'Splat life.', 'Cream of the crop.', 'Too slow, pie face.'];
   function rnd(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function afterAd(fn) { if (SD.ads && SD.ads.afterMatch) SD.ads.afterMatch(fn); else fn(); }
   function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
   function mrnd(a) { return a[Math.floor(S.mrng() * a.length)]; }   // shared random: same on both phones online
   function shuffle(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(S.mrng() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }   // shared random: same order on both phones
@@ -98,7 +99,7 @@ SD.games = SD.games || [];
     if (S && S.names && S.names[i]) return S.names[i];
     if (S && (S.online || S.sim) && i === S.me) return (S.online && S.online.myName) || SD.store.name(0) || 'YOU';
     if (S && S.online && i !== S.me) return (S.online.opp && S.online.opp.name) || 'RIVAL';
-    if (S && S.bots.indexOf(i) >= 0) return 'BOT';
+    if (S && S.bots.indexOf(i) >= 0) return (S.sim || SD.BUILD === 'cg') ? 'RIVAL' : 'BOT';
     if (i === 0) return SD.store.name(0) || 'YOU';
     return SD.store.name(i) || 'FRIEND';
   }
@@ -113,7 +114,7 @@ SD.games = SD.games || [];
   function updatePts() {
     if (S && S.online && S.online.onScore) { try { S.online.onScore(S.totals.slice(), S.game ? S.game.title : ''); } catch (er) {} }
     pads.forEach(function (p, i) {
-      p.ptsEl.innerHTML = S && S.series ? art.icon('trophy', 14) + '<b>' + S.totals[i] + '</b><small>/' + S.total + '</small>' : '';
+      p.ptsEl.innerHTML = S && S.series ? art.icon('star', 16) + '<b>' + (S.totals[i] | 0) + '</b><small>PTS</small>' : '';
     });
   }
 
@@ -130,7 +131,7 @@ SD.games = SD.games || [];
         el.style.setProperty('--op', (i === mine) === (cv === 'bottom') ? 1 : 0); el.style.setProperty('--ol', (i === mine) === (ch === 'right') ? 1 : 0);
       }
       el.style.setProperty('--pc', c.pad); el.style.setProperty('--pf', c.fill); el.style.setProperty('--pd', c.deep);
-      el.innerHTML = '<div class="pad-top"><span class="pad-face"></span><span class="pad-name">' + padLabel(i) + '</span><span class="pad-pw"></span><span class="pad-pts"></span>' + (S && S.bots.indexOf(i) >= 0 ? (S.sim ? '' : '<kbd class="bot">BOT</kbd>') : S && (S.mode === 'boss' || S.nolocal.indexOf(i) >= 0) ? '' : (padKey(i) ? '<kbd>' + (padKey(i) === 'SPACE' ? 'SPC' : padKey(i)) + '</kbd>' : '')) + (i === (mine >= 0 ? mine : 0) ? '<button type="button" class="pad-exit" aria-label="Exit">EXIT</button>' : '') + '</div><div class="pad-stage"></div><div class="pad-dock"></div><div class="pad-badge"></div>';
+      el.innerHTML = '<div class="pad-top"><span class="pad-face"></span><span class="pad-name">' + padLabel(i) + '</span><span class="pad-pts"></span>' + (S && S.bots.indexOf(i) >= 0 ? ((S.sim || SD.BUILD === 'cg') ? '' : '<kbd class="bot">BOT</kbd>') : S && (S.mode === 'boss' || S.nolocal.indexOf(i) >= 0) ? '' : (padKey(i) ? '<kbd>' + (padKey(i) === 'SPACE' ? 'SPC' : padKey(i)) + '</kbd>' : '')) + (i === (mine >= 0 ? mine : 0) ? '<button type="button" class="pad-exit" aria-label="Exit">EXIT</button>' : '') + '</div><div class="pad-stage"></div><div class="pad-dock"></div><div class="pad-badge"></div>';
       padsEl.appendChild(el);
       var p = { el: el, faceEl: el.querySelector('.pad-face'), ptsEl: el.querySelector('.pad-pts'), stage: el.querySelector('.pad-stage'), badge: el.querySelector('.pad-badge'), dock: el.querySelector('.pad-dock'), mood: '', held: null };
       pads.push(p);
@@ -172,7 +173,6 @@ SD.games = SD.games || [];
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'Escape' && S && !exitEl.hidden) { e.preventDefault(); askLeave(); return; }
     if (!S) return;
-    if ((S.useOpen || S.accepting) && /^[1-3]$/.test(e.key)) { var dl = pads[S.me] && pads[S.me].dock.querySelectorAll('.dk-c')[+e.key - 1]; if (dl) { e.preventDefault(); toggleWant(dl.dataset.id); return; } }
     var k = nk(e);
     for (var i = 0; i < pads.length; i++) if (padKey(i) === k) { e.preventDefault(); if (!keyHeld[i]) { keyHeld[i] = true; press(i); } return; }
   });
@@ -208,14 +208,24 @@ SD.games = SD.games || [];
     if (lvl >= 45) skill = 0.95 + 0.04 * Math.min(1, (lvl - 45) / 3) + (Math.random() - 0.5) * 0.01;   // new era: they know every game inside out
     skill = Math.max(0.15, Math.min(0.99, skill));
     art.setLive(0, null); art.setLive(1, null);
-    if (bots.length) art.setLive(1, sim ? sim.skin : art.botSkin());          // the bot always wears the same look; a simulated player has its own
+    if (art.setLiveTint) { art.setLiveTint(0, null); art.setLiveTint(1, null); }
+    if (bots.length) {
+      art.setLive(1, sim ? sim.skin : art.botSkin());          // the bot always wears the same look; a simulated player has its own
+      if (art.setLiveTint) art.setLiveTint(1, sim && sim.tint != null ? (sim.tint | 0) : 0);
+    }
     if (online) {
       var mySkin = (conn.you && conn.you.skin != null) ? (conn.you.skin | 0) : (SD.store.get('skins')[0] | 0);
       var oppSkin = (conn.opp && conn.opp.skin != null) ? (conn.opp.skin | 0) : 0;
       art.setLive(me, mySkin); art.setLive(1 - me, oppSkin);
+      if (art.setLiveTint) {
+        var myTint = (conn.you && conn.you.tint != null) ? (conn.you.tint | 0) : ((SD.store.get('tints') || [0, 0])[0] | 0);
+        var oppTint = (conn.opp && conn.opp.tint != null) ? (conn.opp.tint | 0) : 0;
+        art.setLiveTint(me, myTint); art.setLiveTint(1 - me, oppTint);
+      }
       conn.againMe = conn.againPeer = false;
     }
     var tap = document.getElementById('tapStart'); if (tap) tap.hidden = true;
+    if (SD.ads && SD.ads.hideBanners) SD.ads.hideBanners();
     S = { mode: mode, n: n, bots: bots, nolocal: online ? [1 - me] : bots.slice(), me: me, online: online ? conn : null, roundNo: 0, peerRes: {}, remoteQ: [],
       armed: [[], []], act: [[], []], want: [[], []], peerUse: {}, useOpen: false, peerPw: {}, pwWait: null, sim: sim, rated: !!(online && conn.kind === 'random') || !!sim, oppLevel: online ? (conn.opp.level | 0) : sim ? sim.level : 0, coinDelta: 0, t0: 0,
       names: online ? (function () {
@@ -235,41 +245,215 @@ SD.games = SD.games || [];
     clearCenter(); hideTimer();
     if (mode === 'roulette') return startRoulette();
     if (boss) { S.queue = [SD.bosses[(S.tier - 1) % SD.bosses.length]]; return playRound(S.queue.shift(), [0]); }
-    S.total = (conn && conn.total) || SD.SERIES || 5;                              // 5 games, then the loser gets the pie
+    var want = (opts && opts.total) || (conn && conn.total) || (SD.store && (SD.store.get('games') | 0)) || 5;
+    S.total = (want === 3 || want === 5 || want === 8) ? want : 5;
+    S.gamesNote = (conn && conn.fallback) ? ('This match will have ' + S.total + ' games.') : '';
+    var cap = S.total <= 3 ? 1 : 3;
+    S.pwLeft = [cap, cap]; S.pocket = null; S.botPocket = null; S.pwPicked = false;
+    S.commonOn = [false, false]; S.roundPw = [[], []]; S.skipCommon = [false, false]; S.pwKey = 0;
     S.queue = SD.pools.deck(S.level, S.total, S.mrng);
     playRound(S.queue.shift(), S.all.slice());
   }
 
   function stopSpeech() { try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (e) {} }
 
-  /* ---------- power-up loadout: picked before game 1 and again after game 3 (up to 2 power-ups) ---------- */
-  function pickEnabled() { return !S.spec && S.mode !== 'boss' && S.mode !== 'roulette' && (S.bots.length || S.online) && SD.powers; }
-  function needPick() { return pickEnabled() && !S.tiebreak && S.gameNo === 0; }
-  /* arm a player's picks. HEAD START is paid at once, the rest wait until they kick in */
+  /* ---------- power-ups: 1 use in a 3-game match, 3 uses in a 5 or 8-game match.
+     Commons are chosen once before the match. Game cards auto-apply (or you pick common vs game in 3s). ---------- */
+  function pickOn() { return !!(S && !S.spec && S.mode !== 'boss' && S.mode !== 'roulette' && (S.bots.length || S.online) && SD.powers && !S.tiebreak); }
+  function pickEnabled() { return pickOn(); }
+  function pwCard(id) { return '<button type="button" class="pk-pw" data-id="' + id + '">' + art.icon(SD.powers.by[id].icon, 46) +
+    '<span class="pk-tx"><b>' + SD.powers.by[id].name + '</b><em>' + SD.powers.by[id].short + '</em><small>' + SD.powers.by[id].desc + '</small></span>' +
+    (SD.powers.own(id) ? '<span class="pk-n">x' + SD.powers.own(id) + '</span>' : '') + '</button>'; }
+  function hidePick() {
+    var el = $('#pick');
+    if (S) { if (S.pickTick) { clearInterval(S.pickTick); S.pickTick = 0; } S.pickEnd = null; }
+    if (el) { el.hidden = true; el.innerHTML = ''; }
+  }
+  function syncPw(n, ids, cb) {
+    ids = ids || [];
+    if (!S || !S.online) return cb([]);
+    S.online.peer.send({ t: 'pw', n: n, p: ids });
+    if (S.peerPw[n]) return cb(S.peerPw[n]);
+    S.pwWait = { n: n, go: function () { if (!S || !S.pwWait || S.pwWait.n !== n) return; S.pwWait = null; cb(S.peerPw[n] || []); } };
+    later(function () { if (S && S.pwWait && S.pwWait.n === n) S.pwWait.go(); }, 10000);
+  }
+  function applyHead(slot, id) {
+    if (id !== 'head' || S.commonOn[slot]) return id === 'head';
+    arm(slot, ['head']); S.commonOn[slot] = true;
+    if ((S.pwLeft[slot] | 0) > 0) S.pwLeft[slot]--;
+    if (slot === S.me) S.pocket = null;
+    if (S.bots.indexOf(slot) >= 0) S.botPocket = null;
+    return true;
+  }
   function arm(slot, ids) {
-    var pw = SD.powers, out = [];
+    var pw = SD.powers, out = (S.armed[slot] || []).slice();
     (ids || []).forEach(function (id) {
-      var p = pw.by[id]; if (!p || out.indexOf(id) >= 0 || out.length >= 3) return;
-      if (id === 'head') { S.totals[slot] += 1; if (slot === S.me) pw.setOwn(id, pw.own(id) - 1); } else out.push(id);
+      var p = pw.by[id]; if (!p || out.indexOf(id) >= 0) return;
+      if (id === 'head') { S.totals[slot] += 1; if (slot === S.me) pw.setOwn(id, pw.own(id) - 1); }
+      else out.push(id);
     });
-    if (slot === S.me) out.forEach(function (id) { pw.setOwn(id, pw.own(id) - 1); });      // picked = used up, whether it kicks in or not
+    if (slot === S.me) out.forEach(function (id) {
+      if ((S.armed[slot] || []).indexOf(id) < 0) pw.setOwn(id, pw.own(id) - 1);
+    });
     S.armed[slot] = out; updatePts();
   }
-  /* a power-up kicked in: it is used up (only my own stock changes) */
   function spend(slot, id) {
-    S.armed[slot] = S.armed[slot].filter(function (x) { return x !== id; });
+    S.armed[slot] = (S.armed[slot] || []).filter(function (x) { return x !== id; });
+    if (SD.powers.by[id] && SD.powers.by[id].kind === 'common') S.commonOn[slot] = false;
+  }
+  function actsNow(slot) {
+    var a = [];
+    if (!S.skipCommon[slot]) (S.armed[slot] || []).forEach(function (id) { a.push(id); });
+    (S.roundPw[slot] || []).forEach(function (id) { if (a.indexOf(id) < 0) a.push(id); });
+    return a;
+  }
+  function gameCardFor(gid) {
+    var hit = SD.powers.list.filter(function (p) { return p.kind === 'game' && p.game === gid && SD.powers.own(p.id) > 0; })[0];
+    return hit ? hit.id : null;
   }
   function playRound(game, active) {
     clearAll(); if (SD.cg) SD.cg.play();
-    if (!needPick()) return launch(game, active);
-    pickLoadout(function () { launch(game, active); });
+    if (!pickOn()) return launch(game, active);
+    if (!S.pwPicked) return pickCommon(function () { offerPower(game, active); });
+    offerPower(game, active);
   }
   function launch(game, active) { beginRound(game, active); }
-
-  /* ---------- using power-ups in a game: cards on my pad during the intro, tap to use ---------- */
-  function usableNow(slot) {                           // common ones work in every game (not in a tie-break), game ones only in their own game
-    return (S.armed[slot] || []).filter(function (id) { var p = SD.powers.by[id]; return p.kind === 'game' ? p.game === S.game.id : !S.tiebreak; });
+  function waitPeerThen(ids, then) {
+    S.pwKey = (S.pwKey | 0) + 1;
+    var n = S.pwKey;
+    function go(peer) {
+      if (!S || S.leaving) return;
+      hidePick();
+      if (S.online) applyPeer(peer && peer[0]);
+      then();
+    }
+    if (!S.online) return go([]);
+    var el = $('#pick');
+    el.innerHTML = '<div class="pk-card"><h2>POWER-UP</h2><p class="pk-wait">WAITING FOR OPPONENT...</p></div>'; el.hidden = false;
+    S.pickEnd = hidePick;
+    syncPw(n, ids, go);
   }
+  function applyPeer(id) {
+    var slot = 1 - S.me, q = id && SD.powers.by[id];
+    S.roundPw[slot] = []; S.skipCommon[slot] = false;
+    if (!q) return;
+    if (q.kind === 'game') { S.roundPw[slot] = [id]; S.skipCommon[slot] = true; }
+    else if (!S.commonOn[slot]) { arm(slot, [id]); S.commonOn[slot] = true; }
+  }
+  function commitMine(id) {
+    var me = S.me, q = id && SD.powers.by[id];
+    S.roundPw[me] = []; S.skipCommon[me] = false;
+    if (!q || (S.pwLeft[me] | 0) <= 0) return [];
+    if (q.kind === 'game') {
+      if (SD.powers.own(id) <= 0) return [];
+      S.roundPw[me] = [id]; S.skipCommon[me] = true;
+      SD.powers.setOwn(id, SD.powers.own(id) - 1); S.pwLeft[me]--;
+      return [id];
+    }
+    if (S.commonOn[me]) return [];
+    if (id === S.pocket) S.pocket = null;
+    arm(me, [id]); S.commonOn[me] = true; S.pwLeft[me]--;
+    return [id];
+  }
+  function commitBots(game) {
+    S.bots.forEach(function (b) {
+      if ((S.pwLeft[b] | 0) <= 0) return;
+      S.roundPw[b] = []; S.skipCommon[b] = false;
+      var g = SD.powers.list.filter(function (p) { return p.kind === 'game' && p.game === game.id; })[0];
+      var c = S.botPocket;
+      if (g && (c || S.commonOn[b]) && Math.random() < 0.5) { S.roundPw[b] = [g.id]; S.skipCommon[b] = true; S.pwLeft[b]--; }
+      else if (g && Math.random() < 0.8) { S.roundPw[b] = [g.id]; S.skipCommon[b] = true; S.pwLeft[b]--; }
+      else if (c && !S.commonOn[b]) { arm(b, [c]); S.commonOn[b] = true; S.botPocket = null; S.pwLeft[b]--; }
+    });
+  }
+  function pickCommon(done) {
+    S.pwPicked = true;
+    var pw = SD.powers, commons = pw.ownedOf('common'), el = $('#pick'), tick = 0, fin = false, SEC = 8;
+    if (S.bots.length && Math.random() < 0.55) {
+      var pool = pw.list.filter(function (p) { return p.kind === 'common'; });
+      if (pool.length) S.botPocket = pool[Math.floor(Math.random() * pool.length)].id;
+    }
+    if (S.botPocket === 'head') applyHead(S.bots[0], 'head');
+    function finish(id) {
+      if (fin) return; fin = true; clearInterval(tick);
+      if (id && pw.by[id] && pw.by[id].kind === 'common' && pw.own(id) > 0) S.pocket = id; else S.pocket = null;
+      if (S.pocket === 'head') applyHead(S.me, 'head');
+      S.pwKey = (S.pwKey | 0) + 1;
+      if (!S.online) { hidePick(); return done(); }
+      var elw = $('#pick');
+      elw.innerHTML = '<div class="pk-card"><h2>POWER-UP</h2><p class="pk-wait">WAITING FOR OPPONENT...</p></div>'; elw.hidden = false;
+      S.pickEnd = hidePick;
+      syncPw(S.pwKey, S.pocket ? [S.pocket] : (id === 'head' ? ['head'] : []), function (peer) {
+        hidePick();
+        if (S && S.online) applyHead(1 - S.me, peer && peer[0]);
+        if (S && !S.leaving) done();
+      });
+    }
+    if (!commons.length || (S.pwLeft[S.me] | 0) <= 0) return finish(null);
+    el.innerHTML = '<div class="pk-card"><div class="pk-head"><h2>PICK 1 COMMON</h2><div class="pk-timer"><b id="pkN">' + SEC + '</b></div></div>' +
+      '<div class="pk-bar"><i id="pkBar"></i></div><p class="pk-hint">Works in every game. You can still swap it for a game card later. Skip if you want none.</p>' +
+      '<div class="pk-list">' + commons.map(function (p) { return pwCard(p.id); }).join('') + '</div>' +
+      '<button type="button" class="gel alt" id="pkSkip"><span>SKIP</span></button></div>';
+    Array.prototype.forEach.call(el.querySelectorAll('.pk-pw'), function (b) {
+      b.addEventListener('click', function () { au.sfx.select(); finish(b.dataset.id); });
+    });
+    var sk = el.querySelector('#pkSkip'); if (sk) sk.addEventListener('click', function () { au.sfx.tap(); finish(null); });
+    el.hidden = false; au.music.start('game');
+    var t0 = performance.now();
+    S.pickEnd = hidePick; S.pickTick = tick = setInterval(function () {
+      var f = Math.max(0, SEC - (performance.now() - t0) / 1000), n = Math.ceil(f);
+      var nEl = el.querySelector('#pkN'), bar = el.querySelector('#pkBar');
+      if (nEl && nEl.textContent !== String(n)) { nEl.textContent = n; if (n <= 2) au.sfx.tick(1.4); }
+      if (bar) bar.style.width = (f / SEC * 100) + '%';
+      if (f <= 0) finish(null);
+    }, 100);
+  }
+  function askWhich(cId, gId, game, cb) {
+    var el = $('#pick'), tick = 0, fin = false, SEC = 3, cq = SD.powers.by[cId], gq = SD.powers.by[gId];
+    if (!cq || !gq) return cb(gId || cId);
+    function finish(id) { if (fin) return; fin = true; clearInterval(tick); hidePick(); cb(id); }
+    el.innerHTML = '<div class="pk-card"><div class="pk-head"><h2>' + game.title.toUpperCase() + '</h2><div class="pk-timer"><b id="pkN">' + SEC + '</b></div></div>' +
+      '<div class="pk-bar"><i id="pkBar"></i></div><p class="pk-hint">Common or this game\'s card? ' + (S.pwLeft[S.me] | 0) + ' use' + ((S.pwLeft[S.me] | 0) === 1 ? '' : 's') + ' left. Picks itself in 3 seconds.</p>' +
+      '<div class="pk-or">' +
+      '<button type="button" class="pk-pw" data-pick="C"><small class="pk-tag">COMMON</small>' + art.icon(cq.icon, 46) + '<span class="pk-tx"><b>' + cq.name + '</b><small>' + cq.short + '</small></span></button>' +
+      '<button type="button" class="pk-pw on" data-pick="G"><small class="pk-tag">THIS GAME</small>' + art.icon(gq.icon, 46) + '<span class="pk-tx"><b>' + gq.name + '</b><small>' + gq.short + '</small></span></button>' +
+      '</div></div>';
+    Array.prototype.forEach.call(el.querySelectorAll('.pk-pw'), function (b) {
+      b.addEventListener('click', function () { au.sfx.select(); finish(b.dataset.pick === 'C' ? cId : gId); });
+    });
+    el.hidden = false;
+    var t0 = performance.now();
+    S.pickEnd = hidePick; S.pickTick = tick = setInterval(function () {
+      var f = Math.max(0, SEC - (performance.now() - t0) / 1000), n = Math.ceil(f);
+      var nEl = el.querySelector('#pkN'), bar = el.querySelector('#pkBar');
+      if (nEl && nEl.textContent !== String(n)) { nEl.textContent = n; if (n <= 1) au.sfx.tick(1.4); }
+      if (bar) bar.style.width = (f / SEC * 100) + '%';
+      if (f <= 0) finish(gId);
+    }, 80);
+  }
+  function offerPower(game, active) {
+    S.roundPw = [[], []]; S.skipCommon = [false, false];
+    var me = S.me, left = S.pwLeft[me] | 0;
+    var gCard = left > 0 ? gameCardFor(game.id) : null;
+    var cCard = (left > 0 && S.pocket && SD.powers.own(S.pocket) > 0) ? S.pocket : null;
+    var hasCommon = !!(cCard || S.commonOn[me]);
+    function after(id) {
+      if (id === 'KEEP') id = null;
+      else if (id && SD.powers.by[id] && SD.powers.by[id].kind === 'common' && S.commonOn[me]) id = null;
+      var sent = commitMine(id);
+      commitBots(game);
+      waitPeerThen(sent, function () { launch(game, active); });
+    }
+    if (gCard && hasCommon) {
+      var showC = cCard || (S.armed[me] || [])[0];
+      if (showC && SD.powers.by[showC]) return askWhich(showC, gCard, game, after);
+    }
+    if (gCard) return after(gCard);
+    if (cCard && !S.commonOn[me]) return after(cCard);
+    after(null);
+  }
+
+  function usableNow(slot) { return actsNow(slot); }
   /* a big icon + ring + words pop on a pad: this is how a power-up shows what it does */
   function powerFx(slot, id, text, sub, big) {
     var p = pads[slot], q = SD.powers.by[id]; if (!p || !q) return;
@@ -288,136 +472,48 @@ SD.games = SD.games || [];
     pads.forEach(function (p, i) { if (slot != null && i !== slot) return; Array.prototype.forEach.call(p.el.querySelectorAll('.pfx-ready'), function (t) { if (!id || t.dataset.id === id) t.remove(); }); });
   }
   function gameTitle(id) { var g = SD.games.filter(function (x) { return x.id === id; })[0]; return g ? g.title : id.toUpperCase(); }
-  function paintPw() {                                 // small tags in the name bar: what is switched on in this game
-    pads.forEach(function (p, i) {
-      var w = p.el.querySelector('.pad-pw'); if (!w) return;
-      var on = S.act[i] || [], html = '';
-      on.forEach(function (id) { var q = SD.powers.by[id]; html += '<span class="on">' + art.icon(q.icon, 24) + '<em>' + q.name.split(' ')[0] + '</em></span>'; });
-      (S.armed[i] || []).forEach(function (id) { if (on.indexOf(id) < 0) html += '<span class="dim">' + art.icon(SD.powers.by[id].icon, 22) + '</span>'; });
-      w.innerHTML = html;
-    });
-  }
-  /* the power-up dock: cards under my game. Tap one, or press 1 / 2 / 3, to use it before the game starts */
-  function toggleWant(id) {
-    if (!S) return;
-    var me = S.me, ok = usableNow(me);
-    if (!S.useOpen) return liveUse(me, id);              // in the game: switch it on right now
-    if (ok.indexOf(id) < 0) return;
-    var at = S.want[me].indexOf(id);
-    if (at >= 0) S.want[me].splice(at, 1); else { if (S.want[me].length >= 1) S.want[me].shift(); S.want[me].push(id); cardUse(me, id); }
-    au.sfx.select(); if (S.online) S.online.peer.send({ t: 'pu', n: S.roundNo, p: S.want[me] });
-    paintUse();
-  }
-  /* used while the game is running (a card is tapped after GO) */
-  function liveUse(slot, id, fromPeer) {
-    if (!S.accepting || S.ended || (S.act[slot] || []).length) { if (!fromPeer && slot === S.me && !S.ended) au.sfx.bwoop && au.sfx.bwoop(); return; }
-    var q = SD.powers.by[id]; if (!q || usableNow(slot).indexOf(id) < 0) return;
-    S.act[slot].push(id);
-    if (q.kind === 'game') spend(slot, id);
-    cardUse(slot, id); readyTag(slot, id);
-    later(function () { powerFx(slot, id, q.name + ' ON!', q.short); }, 150);
-    if (S.liveFn) { try { S.liveFn(slot, id); } catch (e) {} }
-    if (!fromPeer && S.online) S.online.peer.send({ t: 'pl', n: S.roundNo, id: id });
-    paintPw(); paintUse();
-  }
-  function cardUse(slot, id) {                           // the moment a card is switched on: pop + glow on the pad and the character
+  function paintPw() {}
+  function pwBurst(slot, id) {
     var p = pads[slot], q = SD.powers.by[id]; if (!p || !q) return;
-    p.el.classList.add('pw-on'); setTimeout(function () { if (p.el) p.el.classList.remove('pw-on'); }, 1200);
-    var c = fx.center(p.stage); fx.burst(c.x, c.y, 14); au.sfx.perfect(); fx.vibrate && fx.vibrate(20);
-    var d = document.createElement('div'); d.className = 'pfx-fly'; d.innerHTML = art.icon(q.icon, 64);
-    p.el.appendChild(d); setTimeout(function () { if (d.parentNode) d.remove(); }, 900);
-    var w = document.createElement('div'); w.className = 'pw-word'; w.textContent = q.name + ' ON!'; p.el.appendChild(w); setTimeout(function () { if (w.parentNode) w.remove(); }, 1400);
+    Array.prototype.forEach.call(p.el.querySelectorAll('.pw-burst'), function (x) { x.remove(); });
+    var d = document.createElement('div');
+    d.className = 'pw-burst';
+    d.innerHTML = '<span class="pw-burst-wash"></span><span class="pw-burst-ring"></span>' + art.icon(q.icon, 120) + '<b>' + q.name + '</b><small>' + q.short + '</small>';
+    p.el.appendChild(d);
+    p.el.classList.add('pw-on');
+    setTimeout(function () { if (d.parentNode) d.remove(); if (p.el) p.el.classList.remove('pw-on'); }, 1500);
+    var c = fx.center(p.stage || p.el); fx.burst(c.x, c.y, 28); if (fx.flash) fx.flash('#ffe566'); au.sfx.perfect(); if (fx.vibrate) fx.vibrate(30);
   }
   function paintUse() {
     var me = S.me, p = pads[me];
     pads.forEach(function (x) { if (x.dock) { x.dock.innerHTML = ''; x.dock.className = 'pad-dock'; } x.el.classList.remove('has-dock'); });
     if (!pickEnabled() || !p || !p.dock) return;
-    var lists = pads.map(function (x, k) { var l = (S.armed[k] || []).slice(); (S.act[k] || []).forEach(function (id) { if (l.indexOf(id) < 0) l.push(id); }); return l; });
-    if (!lists[me].length && !(S.act[1 - me] || []).length) return;
-    var by = SD.powers.by, ok = usableNow(me), live = S.useOpen || S.accepting, wig = (SD.store.get('level') | 0) <= 10 && live;
+    var lists = pads.map(function (x, k) { return (S.act[k] || []).slice(); });
+    if (!lists[0].length && !lists[1].length) return;
+    var by = SD.powers.by;
     pads.forEach(function (pd, k) {
       var mine = k === me, h = '';
       if (S.active.indexOf(k) < 0 && !mine) return;
-      lists[k].forEach(function (id, n) {
-        if (k !== me && (S.act[k] || []).indexOf(id) < 0) return;
-        var q = by[id], act = (S.act[k] || []).indexOf(id) >= 0, on = act || (mine && S.want[me].indexOf(id) >= 0);
-        if (!mine) { h += '<span class="dk-c foe' + (on ? ' on' : '') + '">' + art.icon(q.icon, 34) + '<b>' + (on ? 'ON!' : q.name.split(' ')[0]) + '</b></span>'; return; }
-        var used = (S.act[k] || []).length > 0, usable = !used && ok.indexOf(id) >= 0 || act;
-        h += '<button type="button" class="dk-c' + (on ? ' on' : '') + (used && !act ? ' used' : '') + (usable ? '' : ' off') + (wig && usable && !on ? ' wig' : '') + '" data-id="' + q.id + '" aria-label="' + q.name + '">' + art.icon(q.icon, 34) +
-          '<b>' + (act ? 'USED' : used ? 'MUTED' : on ? 'ON!' : usable ? q.name.split(' ')[0] : (q.kind === 'game' ? gameTitle(q.game).split(' ')[0] : 'NO')) + '</b>' + (usable && !act ? '<kbd>' + (n + 1) + '</kbd>' : '') + '</button>';
+      lists[k].forEach(function (id) {
+        var q = by[id]; if (!q) return;
+        h += '<span class="dk-c on' + (mine ? '' : ' foe') + '" tabindex="0" title="' + q.name + ' — ' + q.short + '">' + art.icon(q.icon, 34) +
+          '<b>' + q.name + '</b><i class="dk-tip"><em>' + q.name + '</em>' + q.desc + '</i></span>';
       });
-      pd.dock.className = 'pad-dock show' + (mine && live ? ' live' : ''); pd.dock.innerHTML = h; pd.el.classList.add('has-dock');
-    });
-    Array.prototype.forEach.call(p.dock.querySelectorAll('.dk-c'), function (b) {
-      b.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); ev.preventDefault(); toggleWant(b.dataset.id); });
+      if (!h) return;
+      pd.dock.className = 'pad-dock show'; pd.dock.innerHTML = h; pd.el.classList.add('has-dock');
     });
   }
-  /* at GO the choices are locked for everybody. GAME power-ups are used up now, COMMON ones when they kick in */
   function lockAll() {
     if (S.locked) return;
     S.locked = true;
     S.useOpen = false;
-    var peer = S.online ? S.peerUse[S.roundNo] || [] : null, picked = [[], []];
-    [0, 1].forEach(function (slot) {
-      var want = S.online && slot !== S.me ? peer : S.want[slot], ok = usableNow(slot);
-      want.forEach(function (id) { if (ok.indexOf(id) >= 0 && picked[slot].indexOf(id) < 0 && picked[slot].length < 1) picked[slot].push(id); });
-    });
-    S.act = picked;
-    [0, 1].forEach(function (slot) { picked[slot].forEach(function (id, k) { readyTag(slot, id); later(function () { powerFx(slot, id, SD.powers.by[id].name + ' ON!', SD.powers.by[id].short); }, 200 + k * 250); }); });
-    [0, 1].forEach(function (slot) { picked[slot].forEach(function (id) { if (SD.powers.by[id].kind === 'game') spend(slot, id); }); });
-    paintPw();
-  }
-
-  function pickLoadout(done) {
-    var key = 1, el = $('#pick'), pw = SD.powers, fin = false, tick = 0, SEC = 8, sel = [];
-    var owned = pw.list.filter(function (p) { return pw.own(p.id) > 0; });
-    function hide() { clearInterval(tick); el.hidden = true; el.innerHTML = ''; S.pickEnd = null; }
-    function go() { if (!S || S.leaving) return; hide(); S.pwWait = null; done(); }
-    function finish() {
-      if (fin) return; fin = true; clearInterval(tick);
-      var mine = sel.filter(function (id) { return pw.own(id) > 0; }).slice(0, 3);
-      S.bots.forEach(function (b) { arm(b, pw.botPick(S.oppLevel || SD.store.get('level'))); });
-      arm(S.me, mine);
-      if (!S.online) return go();
-      S.online.peer.send({ t: 'pw', n: key, p: mine });
-      if (S.peerPw[key]) { arm(1 - S.me, S.peerPw[key]); return go(); }
-      el.innerHTML = '<div class="pk-card"><h2>PICK YOUR POWER-UPS</h2><p class="pk-wait">WAITING FOR OPPONENT...</p></div>'; el.hidden = false;
-      S.pwWait = { n: key, go: function () { if (!S.pwWait) return; arm(1 - S.me, S.peerPw[key] || []); go(); } };
-      later(function () { if (S.pwWait && S.pwWait.n === key) S.pwWait.go(); }, 7000);
-    }
-    if (!owned.length) { S.pickEnd = hide; return finish(); }
-    function paintSel() {
-      Array.prototype.forEach.call(el.querySelectorAll('.pk-pw'), function (x) { x.classList.toggle('on', sel.indexOf(x.dataset.id) >= 0); });
-      var c = el.querySelector('#pkCount'); if (c) c.innerHTML = '<b>' + sel.length + '</b> / 3';
-      var ps = el.querySelector('#pkSel'); if (ps) { ps.textContent = Math.min(sel.length, 3) + '/3'; ps.className = 'pk-sel s' + Math.min(sel.length, 3); }
-    }
-    var cards = owned.map(function (p) {
-      return '<button type="button" class="pk-pw" data-id="' + p.id + '">' + art.icon(p.icon, 46) +
-        '<span class="pk-tx"><b>' + p.name + '</b><em>' + (p.kind === 'game' ? 'ONLY IN ' + gameTitle(p.game) : 'WORKS IN EVERY GAME') + '</em><small>' + p.desc + '</small></span>' +
-        '<span class="pk-n">x' + pw.own(p.id) + '</span><i class="pk-ck"></i></button>';
-    }).join('');
-    el.innerHTML = '<div class="pk-card"><div class="pk-head"><h2>PICK 3 POWER-UPS</h2><span class="pk-sel s0" id="pkSel">0/3</span><div class="pk-timer"><b id="pkN">' + SEC + '</b></div></div>' +
-      '<div class="pk-bar"><i id="pkBar"></i></div><p class="pk-hint">Tap to choose. They stay with you for the whole match. Before each game, tap a card under your game (or press 1 2 3) to use it. <span id="pkCount" class="pk-count"></span></p>' +
-      '<div class="pk-list">' + cards + '</div></div>';
-    var auto = 0;
-    Array.prototype.forEach.call(el.querySelectorAll('.pk-pw'), function (b) {
-      b.addEventListener('click', function () {
-        au.sfx.tap(); var id = b.dataset.id, at = sel.indexOf(id);
-        if (at >= 0) sel.splice(at, 1); else if (sel.length < 3) sel.push(id); else return;
-        clearTimeout(auto); paintSel();
-        if (sel.length >= 3 || sel.length >= owned.length) auto = setTimeout(function () { au.sfx.select(); finish(); }, 550);
+    (S.act || [[], []]).forEach(function (ids, slot) {
+      ids.forEach(function (id, k) {
+        if (!SD.powers.by[id]) return;
+        later(function () { pwBurst(slot, id); }, 60 + k * 220);
       });
     });
-    paintSel(); el.hidden = false; au.music.start('game');
-    var t0 = performance.now();
-    S.pickEnd = hide;
-    tick = setInterval(function () {
-      var f = Math.max(0, SEC - (performance.now() - t0) / 1000), n = Math.ceil(f);
-      var nEl = el.querySelector('#pkN'), bar = el.querySelector('#pkBar');
-      if (nEl && nEl.textContent !== String(n)) { nEl.textContent = n; if (n <= 2) au.sfx.tick(1.4); }
-      if (bar) bar.style.width = (f / SEC * 100) + '%';
-      if (f <= 0) finish();
-    }, 100);
+    paintUse();
   }
 
   /* ---------- one round ---------- */
@@ -449,17 +545,13 @@ SD.games = SD.games || [];
         setFace(i, 'cheer');
       } else setFace(i, 'idle');
     });
-    S.act = [[], []]; S.want = [[], []]; S.useOpen = false; S.liveFn = null;
+    S.act = [actsNow(0), actsNow(1)]; S.want = [[], []]; S.useOpen = false; S.liveFn = null;
     pads.forEach(function (p, i) { var n = p.el.querySelector('.pad-name'); if (n) n.innerHTML = padLabel(i); });
-    var canUse = pickEnabled() && (usableNow(0).length || usableNow(1).length);
-    if (canUse) {
-      S.useOpen = true;
-      S.bots.forEach(function (b) { later(function () { S.want[b] = usableNow(b).filter(function (id) { return SD.powers.by[id].kind === 'game' ? Math.random() < 0.85 : Math.random() < 0.4; }).slice(0, 1); }, 500 + Math.random() * 900); });
-    }
+    var onNames = (S.act[S.me] || []).map(function (id) { return SD.powers.by[id] && SD.powers.by[id].name; }).filter(Boolean);
     paintPw(); paintUse();
     updatePts(); hideTimer(); showExit(true);
     au.music.start('game');
-    setCenter('<div class="intro">' + (S.series && !S.tiebreak ? '<small class="rnd">GAME ' + S.gameNo + ' OF ' + S.total + '</small>' : S.tiebreak ? '<small class="rnd">TIE BREAKER</small>' : '') + art.icon(game.icon, 84) + '<b>' + game.title + '</b><span>' + howTo(game) + '</span>' + (canUse ? '<em class="use-hint">' + (kb() ? 'PRESS 1 OR TAP A CARD' : 'TAP A CARD BELOW') + ' TO USE A POWER-UP. ONE PER GAME. IT WORKS ANY TIME!</em>' : '') + '</div>', 'pop');
+    setCenter('<div class="intro">' + (S.series && !S.tiebreak ? '<small class="rnd">GAME ' + S.gameNo + ' OF ' + S.total + '</small>' : S.tiebreak ? '<small class="rnd">TIE BREAKER</small>' : '') + (S.gamesNote && S.gameNo === 1 && !S.tiebreak ? '<span>' + S.gamesNote + '</span>' : '') + art.icon(game.icon, 84) + '<b>' + game.title + '</b><span>' + howTo(game) + '</span>' + (onNames.length ? '<em class="use-hint">' + onNames.join(' · ') + ' IS ON</em>' : '') + '</div>', 'pop');
     au.sfx.select();
     later(function () { countdown(3); }, introMs(game));
   }
@@ -582,10 +674,27 @@ SD.games = SD.games || [];
     if (S.peerRes[k]) go(); else later(go, 6000);
   }
 
+  /* How many match points this mini-game is worth. Harder games with more hurdles pay more than a single +1. */
+  function earnPts(gid, r) {
+    var p = r ? +r.p : 0, n = 0;
+    if (gid === 'bomb') n = p >= 0 ? 1 : 0;
+    else if (gid === 'dodge' || gid === 'hop' || gid === 'flap' || gid === 'stack' || gid === 'skip' || gid === 'knife') n = Math.max(0, Math.round(p));
+    else if (gid === 'freeze') n = p >= 10 ? 4 : Math.max(0, Math.round(Math.min(1, p) * 3));
+    else if (gid === 'balance') n = Math.max(0, Math.round(p / 3));
+    else if (gid === 'beat') n = Math.max(0, Math.round(p / 2));
+    else if (gid === 'echo' || gid === 'snack') n = Math.max(0, Math.round(p));
+    else if (gid === 'zig') n = Math.max(0, Math.round(p / 12));
+    else if (gid === 'lander') n = Math.max(0, Math.round(p / 100));
+    else if (gid === 'pinata') n = Math.max(0, Math.round(p / 20));
+    else n = p > 0 ? 1 : 0;
+    return Math.max(0, Math.min(12, n | 0));
+  }
+
   function finishRound(results) {
     var act = S.active, res = {}, i, used = [];
     var has = function (slot, id) { return (S.act[slot] || []).indexOf(id) >= 0; };
     var count = !S.spec && S.series && !S.tiebreak && S.mode !== 'boss';
+    var raw = results.map(function (r) { return { p: r.p, label: r.label }; });
     var tag = function (r, p, label) { var o = {}; for (var k in r) o[k] = r[k]; o.p = p; o.label = label; return o; };
     if (count && act.length === 2) {
       var a0 = results[0].p, a1 = results[1].p;
@@ -600,13 +709,14 @@ SD.games = SD.games || [];
     results.forEach(function (r, k) { res[act[k]] = r; });
     var ps = results.map(function (r) { return r.p; });
     var best = Math.max.apply(null, ps), worst = Math.min.apply(null, ps), allTie = best === worst;
-    act.forEach(function (i) {
+    act.forEach(function (i, k) {
       var r = res[i], isBest = !allTie && r.p === best, isWorst = !allTie && r.p === worst;
       pads[i].el.classList.toggle('win', isBest); pads[i].el.classList.toggle('lose', isWorst);
       var lbl = r.label == null ? '' : r.label;
-      var dbl = count && isBest && has(i, 'double'), pts = dbl ? 2 : 1;
-      if (dbl) { used.push([i, 'double']); lbl = 'DOUBLE POINT: +2'; }
-      if (count && isBest) S.totals[i] += pts;
+      var earn = count ? earnPts(S.game && S.game.id, raw[k]) : 0;
+      var dbl = count && isBest && has(i, 'double'), pts = dbl ? earn * 2 : earn;
+      if (dbl) { used.push([i, 'double']); lbl = 'DOUBLE POINT: x' + pts; }
+      if (count) S.totals[i] += pts;
       if (S.rated && count && i === S.me && !allTie) {          // coins: quick wins pay more, a lost game costs 1
         if (isBest) S.coinDelta += 2 + Math.round(3 * Math.max(0, 1 - (performance.now() - S.t0) / 12000)); else if (isWorst) S.coinDelta -= 1;
       }
@@ -614,11 +724,12 @@ SD.games = SD.games || [];
         used.push([i, 'steal']); lbl = lbl || 'STEALER: RIVAL -1';
         act.forEach(function (j) { if (j !== i) S.totals[j] = Math.max(0, S.totals[j] - 1); });
       }
+      var shown = count ? (pts > 0 ? '+' + pts : (isWorst ? 'LOST' : '0')) : (isBest ? 'WIN' : isWorst ? 'LOST' : 'DRAW');
       if (S.mode !== 'boss') {                              // big result in the pad: crown + point, or thumbs down
         pads[i].badge.innerHTML = '';
         pads[i].stage.innerHTML = '<div class="res ' + (isBest ? 'win' : isWorst ? 'lose' : 'draw') + '">' +
           (isBest ? art.icon('crown') : isWorst ? art.icon('thumbdown') : '<b class="res-eq">=</b>') +
-          '<b class="res-txt">' + (isBest ? (count ? '+' + pts : 'WIN') : isWorst ? 'LOST' : 'DRAW') + '</b>' +
+          '<b class="res-txt">' + shown + '</b>' +
           (lbl ? '<span class="res-lbl">' + lbl + '</span>' : '') + '</div>';
       } else pads[i].badge.innerHTML = (lbl || isBest || isWorst) ?
         '<div class="pb ' + (isBest ? 'best' : isWorst ? 'worst' : '') + '">' + (isBest ? art.icon('crown', 22) : isWorst ? art.icon(S.series ? 'cross' : 'pie', 22) : '') + '<span>' + lbl + '</span></div>' : '';
@@ -626,7 +737,7 @@ SD.games = SD.games || [];
     });
     used.forEach(function (u, k) {
       spend(u[0], u[1]);
-      var say = { second: ['SECOND CHANCE!', 'YOUR LOSS BECAME A DRAW'], lucky: ['LUCKY TIE!', 'THE DRAW IS YOUR WIN'], double: ['DOUBLE POINT!', 'x2  +2 POINTS'], steal: ['STEALER!', 'RIVAL LOSES 1 POINT'] }[u[1]] || [SD.powers.by[u[1]].name, ''];
+      var say = { second: ['SECOND CHANCE!', 'YOUR LOSS BECAME A DRAW'], lucky: ['LUCKY TIE!', 'THE DRAW IS YOUR WIN'], double: ['DOUBLE POINT!', 'x2 THIS GAME'], steal: ['STEALER!', 'RIVAL LOSES 1 POINT'] }[u[1]] || [SD.powers.by[u[1]].name, ''];
       later(function () { powerFx(u[0], u[1], say[0], say[1], true); }, 250 + k * 300);
     });
     updatePts();
@@ -728,6 +839,7 @@ SD.games = SD.games || [];
     $('#cereLine').textContent = '';
     $('#cereStage').innerHTML = '<div class="cs-loser"><div class="cs-face">' + art.face(loser, 'worry') + '</div><div class="cs-pie">' + art.icon('pie', 120) + '</div></div><div class="cs-crowd">' + crowd + '</div>';
     var btns = $('#cereBtns'); btns.hidden = true;
+    var rate = $('#cereRate'); if (rate) { rate.hidden = true; rate.innerHTML = ''; }
     btns.innerHTML = '<button class="gel" id="bAgain" type="button" aria-label="Play again">' + art.icon('again', 30) + '</button>' +
       '<button class="gel alt" id="bHome" type="button" aria-label="Home">' + art.icon('home', 30) + '</button>' +
       '<button class="gel alt" id="bShare" type="button" aria-label="Share">' + art.icon('share', 30) + '</button>';
@@ -746,11 +858,14 @@ SD.games = SD.games || [];
       au.sfx.splat();
       var t = $('#cereTitle');
       t.textContent = name + (party ? ' LOSES!' : ' PAYS!'); t.className = 'pop';
-      if (!S.online) SD.store.addPie(loser);
+      if (!S.online) {
+        SD.store.addPie(loser);
+        if (loser !== 0) SD.store.set('wins', (SD.store.get('wins') | 0) + 1);
+      }
     }, 1350);
     later(function () {
       var meC = (S.bots.length || S.online) ? S.me : -1;
-      if (meC >= 0 && loser !== meC) { au.sfx.win(); au.sfx.cheer(); }
+      if (meC >= 0 && loser !== meC) { au.sfx.win(); au.sfx.cheer(); if (SD.cg && SD.cg.happy) SD.cg.happy(); }
       else { au.sfx.lose(); au.sfx.laugh(0.5); au.sfx.ooh(); }
       stage.querySelectorAll('.fan').forEach(function (f, k) {
         var i = +f.dataset.i;
@@ -763,9 +878,14 @@ SD.games = SD.games || [];
       $('#cereLine').textContent = rnd(ROASTS);
     }, 1750);
     later(function () { showXp(loser); }, 2300);
-    var CS = S; setTimeout(function () { if (S === CS && S.inCere) btns.hidden = false; }, 2500);   // plain timer: nothing that clears match timers can hide the way out
-    $('#bAgain').onclick = function () { au.sfx.select(); if (S.online) rematch(); else if (S.sim && SD.sim) startSession('pay', null, { sim: SD.sim.pick() }); else startSession(S.mode); };
-    $('#bHome').onclick = function () { au.sfx.tap(); E.home(); };
+    var CS = S; setTimeout(function () {
+      if (S === CS && S.inCere) {
+        btns.hidden = false;
+        if (SD.feedback && SD.feedback.mount) SD.feedback.mount($('#cereRate'));
+      }
+    }, 2500);   // plain timer: nothing that clears match timers can hide the way out
+    $('#bAgain').onclick = function () { au.sfx.select(); afterAd(function () { if (S.online) rematch(); else if (S.sim && SD.sim) startSession('pay', null, { sim: SD.sim.pick() }); else startSession(S.mode); }); };
+    $('#bHome').onclick = function () { au.sfx.tap(); afterAd(function () { E.home(); }); };
     $('#bShare').onclick = function () { share(name); };
     if (S.online && S.online.kind === 'tour') {
       $('#bAgain').style.display = 'none'; $('#bShare').style.display = 'none';
@@ -778,7 +898,7 @@ SD.games = SD.games || [];
     if (S.mode === 'boss') return;
     var el = $('#cereXp');
     if (!S.rated) {
-      el.innerHTML = '<div class="xp-msg hint">' + art.icon('offline', 22) + '<span>' + (SD.BUILD === 'cg' ? 'PLAY (NOT WITH A FRIEND) TO GROW YOUR LEVEL AND COINS' : 'LEVELS AND COINS: RANDOM ONLINE MATCHES ONLY') + '</span></div>';
+      el.innerHTML = '<div class="xp-msg hint">' + art.icon('offline', 22) + '<span>' + (SD.BUILD === 'cg' ? 'TWO ON ONE PHONE: LEVEL AND COINS STAY THE SAME' : 'LEVELS AND COINS: RANDOM ONLINE MATCHES ONLY') + '</span></div>';
       return;
     }
     var P = SD.progress, won = loser !== S.me, r = P.rate(won, S.oppLevel);
@@ -826,7 +946,6 @@ SD.games = SD.games || [];
     else if (m.t === 'go') onPeerGo(m);
     else if (m.t === 'r') { S.peerRes[m.n] = m; if (S.settle && m.n === S.roundNo) S.settle(); }
     else if (m.t === 'pw') { S.peerPw[m.n] = Array.isArray(m.p) ? m.p.slice(0, 3) : []; if (S.pwWait && S.pwWait.n === m.n) S.pwWait.go(); }
-    else if (m.t === 'pl') { if (m.n === S.roundNo && typeof m.id === 'string' && SD.powers.by[m.id]) { var fp = 1 - S.me; if ((S.armed[fp] || []).indexOf(m.id) >= 0) liveUse(fp, m.id, true); } }
     else if (m.t === 'pu') { S.peerUse[m.n] = Array.isArray(m.p) ? m.p.slice(0, 3) : []; }
     else if (m.t === 'again') { S.online.againPeer = true; tryRematch(); }
     else if (m.t === 'start') { S.online.seed = m.seed; startSession('online', S.online); }
@@ -874,9 +993,10 @@ SD.games = SD.games || [];
     btns.innerHTML = (win ? '' : '<button class="gel" id="bAgain" type="button" aria-label="Try again">' + art.icon('again', 30) + '</button>') +
       '<button class="gel alt" id="bHome" type="button" aria-label="Home">' + art.icon('home', 30) + '</button>';
     btns.hidden = false; ceremonyEl.hidden = false;
-    if (win) { var c = fx.center($('#cereStage')); fx.confetti(c.x, c.y, 50, 1.2); fx.rain(50); au.sfx.cheer(); au.say(art.skinName(id) + ' unlocked!', { pitch: 1.8, rate: 1.05 }); }
-    var again = $('#bAgain'); if (again) again.onclick = function () { au.sfx.select(); startSession('boss'); };
-    $('#bHome').onclick = function () { au.sfx.tap(); E.home(); };
+    if (SD.feedback && SD.feedback.mount) SD.feedback.mount($('#cereRate'));
+    if (win) { var c = fx.center($('#cereStage')); fx.confetti(c.x, c.y, 50, 1.2); fx.rain(50); au.sfx.cheer(); au.say(art.skinName(id) + ' unlocked!', { pitch: 1.8, rate: 1.05 }); if (SD.cg && SD.cg.happy) SD.cg.happy(); }
+    var again = $('#bAgain'); if (again) again.onclick = function () { au.sfx.select(); afterAd(function () { startSession('boss'); }); };
+    $('#bHome').onclick = function () { au.sfx.tap(); afterAd(function () { E.home(); }); };
   }
 
   function share(name) {
@@ -902,6 +1022,7 @@ SD.games = SD.games || [];
     stopSpeech();
     var tap = document.getElementById('tapStart'); if (tap) tap.hidden = true;
     art.setLive(0, spec.a && spec.a.skin | 0); art.setLive(1, spec.b && spec.b.skin | 0);
+    if (art.setLiveTint) { art.setLiveTint(0, spec.a && spec.a.tint | 0); art.setLiveTint(1, spec.b && spec.b.tint | 0); }
     S = { mode: 'online', n: 2, bots: [], nolocal: [0, 1], me: 0, spec: true, specStop: spec.onStop, specGotEnd: false,
       online: { role: 'host', kind: 'spec', arena: spec.arena | 0, peer: { send: function () {}, onmessage: null, onclose: null } },
       roundNo: 0, peerRes: {}, remoteQ: [], armed: [[], []], act: [[], []], want: [[], []], peerUse: {}, useOpen: false, peerPw: {},
@@ -964,7 +1085,6 @@ SD.games = SD.games || [];
     if (!S || !S.spec || !m) return;
     if (m.t === 'd') onRemote('d', slot);
     else if (m.t === 'u') onRemote('u', slot);
-    else if (m.t === 'pl' && typeof m.id === 'string') liveUse(slot, m.id, true);
   }
 
   /* ---------- safety net: an error during a match or end screen must never leave the player stuck ---------- */
@@ -976,7 +1096,8 @@ SD.games = SD.games || [];
     document.body.appendChild(b);
   }
   function onCrash() {
-    var inGame = (arenaEl && !arenaEl.hidden) || (ceremonyEl && !ceremonyEl.hidden) || !($('#party') || {}).hidden;
+    var party = $('#party');
+    var inGame = (arenaEl && !arenaEl.hidden) || (ceremonyEl && !ceremonyEl.hidden) || (party && !party.hidden);
     if (inGame) setTimeout(rescue, 600);
   }
   window.addEventListener('error', onCrash);
@@ -989,7 +1110,7 @@ SD.games = SD.games || [];
       exitEl.innerHTML = '<span>EXIT</span>';
       exitEl.addEventListener('click', function () { au.sfx.tap(); askLeave(); });
     },
-    start: function (mode) { startSession(mode); },
+    start: function (mode, opts) { startSession(mode, null, opts); },
     startOnline: function (conn) { startSession('online', conn); },
     startSim: function (sim) { startSession('pay', null, { sim: sim }); },
     watch: function (spec) { startWatchSession(spec || {}); },
@@ -1003,6 +1124,7 @@ SD.games = SD.games || [];
       if (spec) {
         if (S) { clearAll(); if (S.game && S.game.cleanup) { try { S.game.cleanup(); } catch (e) {} } }
         S = null; stopSpeech(); art.setLive(0, null); art.setLive(1, null);
+        if (art.setLiveTint) { art.setLiveTint(0, null); art.setLiveTint(1, null); }
         var lb = document.getElementById('leaveBox'); if (lb) lb.remove();
         var ban = arenaEl.querySelector('.watch-live'); if (ban) ban.remove();
         if (fx && fx.stop) fx.stop();
@@ -1019,7 +1141,7 @@ SD.games = SD.games || [];
       if (SD.party && S && S.online && !tour) SD.party.matchOver();
       if (S && S.online && !tour) { try { S.online.peer.send({ t: 'bye' }); S.online.peer.onclose = null; S.online.peer.close(); } catch (e) {} }
       if (S) { clearAll(); if (S.game && S.game.cleanup) { try { S.game.cleanup(); } catch (e) {} } }
-      S = null; stopSpeech(); art.setLive(0, null); art.setLive(1, null);  var lb = document.getElementById('leaveBox'); if (lb) lb.remove();
+      S = null; stopSpeech(); art.setLive(0, null); art.setLive(1, null); if (art.setLiveTint) { art.setLiveTint(0, null); art.setLiveTint(1, null); }  var lb = document.getElementById('leaveBox'); if (lb) lb.remove();
       if (fx && fx.stop) fx.stop();
       arenaEl.hidden = true; ceremonyEl.hidden = true; $('#home').hidden = false;
       if (tour && SD.tour) { hideTimer(); clearCenter(); padsEl.innerHTML = ''; pads = []; $('#goText').classList.remove('on'); au.music.start('menu'); return SD.tour.back(); } if (SD.arenas) SD.arenas.leave();
@@ -1027,6 +1149,7 @@ SD.games = SD.games || [];
       $('#goText').classList.remove('on');
       SD.main && SD.main.refresh();
       au.music.start('menu');
+      if (SD.ads && SD.ads.showHomeBanner) SD.ads.showHomeBanner();
     }
   };
   SD.engine = E;

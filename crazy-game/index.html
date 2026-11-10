@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Silly Duel</title>
+<meta name="description" content="Quick silly games to win the trophy. Best of 5 mini games, a 2 player duel with skins, power-ups and levels.">
+<meta name="theme-color" content="#ffd9ec">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/games2.css">
+<link rel="stylesheet" href="css/games3.css">
+<link rel="stylesheet" href="css/arenas.css">
+<link rel="stylesheet" href="css/dock.css">
+<link rel="stylesheet" href="css/skins.css">
+<link rel="stylesheet" href="css/intro.css">
+</head>
+<body>
+<div id="app">
+  <div class="bgfx" aria-hidden="true"></div>
+
+  <main id="home" class="screen">
+    <div class="topbar">
+      <h1 class="logo" aria-label="Silly Duel"><span>SILLY</span><span>DUEL</span></h1>
+      <button class="icon-btn" id="btnMusic" type="button" aria-label="Music" aria-pressed="true"></button>
+      <button class="icon-btn" id="btnSfx" type="button" aria-label="Sound effects" aria-pressed="true"></button>
+      <button class="icon-btn" id="btnMore" type="button" aria-label="More"></button>
+    </div>
+    <div class="home-mid">
+      <div class="duel" id="duel"></div>
+      <div id="bossWrap"></div>
+      <div class="modes" id="modes">
+        <div class="mode-grid two">
+          <button class="gel mode online" type="button" data-mode="quick"><span class="mode-ico" data-icon="playgo"></span><span>PLAY</span></button>
+          <button class="gel mode pay offline" type="button" data-mode="pay"><span class="mode-ico" data-icon="friend"></span><span>PLAY WITH A FRIEND</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="home-foot mode-row2 pair" id="modeRow2">
+      <button class="gel mode-pw" type="button" id="btnPowers"><span class="mode-ico" data-icon="zap" data-sz="26"></span><span>POWERS</span></button>
+      <button class="gel mode-pw" type="button" id="btnArena"><span class="mode-ico" data-icon="spark" data-sz="26"></span><span>ARENAS</span></button>
+    </div>
+  </main>
+
+  <main id="arena" class="screen" hidden data-count="2">
+    <div id="pads"></div>
+    <div id="center"><div id="centerInner"></div></div>
+    <div id="goText" aria-hidden="true"></div>
+    <div id="hud"><div id="timer"><i></i></div></div>
+    <button class="icon-btn exit" id="btnExit" type="button" aria-label="Back to start" hidden></button>
+  </main>
+
+  <section id="ceremony" class="screen" hidden aria-live="polite">
+    <div class="cere-card">
+      <h2 id="cereTitle"></h2>
+      <div class="cere-stage" id="cereStage"></div>
+      <p id="cereLine"></p>
+      <div id="cereXp" class="cere-xp"></div>
+      <div id="cereRate" class="cere-rate" hidden></div>
+      <div class="cere-btns" id="cereBtns" hidden></div>
+    </div>
+  </section>
+
+  <section id="offline" class="screen" hidden aria-label="Play with a friend">
+    <div class="wd-card of-card">
+      <div class="page-head">
+        <button class="icon-btn pg-back" id="ofBack" type="button" aria-label="Back"></button>
+        <h2>PLAY WITH A FRIEND</h2>
+      </div>
+      <div class="of-row" id="ofRow"></div>
+      <div class="opp" id="ofOpp" role="radiogroup" aria-label="Player 2" hidden></div>
+      <p class="on-note">Two players on this phone. Tap a face or name to change it. Tap KEY to pick the key for that player.</p>
+      <b class="wd-sec">GAMES</b>
+      <div class="games-pick" id="ofGames" role="radiogroup" aria-label="How many games"></div>
+      <button class="gel" id="ofGo" type="button"><span>START</span></button>
+    </div>
+  </section>
+
+  <section id="arenas" class="screen" hidden aria-label="Arenas">
+    <div class="wd-card pw-card-wrap">
+      <div class="page-head">
+        <button class="icon-btn pg-back" id="arBack" type="button" aria-label="Back"></button>
+        <h2>ARENAS</h2>
+      </div>
+      <div class="pw-coins" id="arCoins"></div>
+      <div class="ar-grid" id="arGrid"></div>
+    </div>
+  </section>
+
+  <section id="info" class="screen" hidden aria-label="More">
+    <div class="wd-card pw-card-wrap">
+      <div class="page-head">
+        <button class="icon-btn pg-back" id="infoBack" type="button" aria-label="Back"></button>
+        <h2>MORE</h2>
+      </div>
+      <div class="pw-tabs info-tabs" id="infoTabs" role="tablist">
+        <button class="pw-tab on" type="button" data-tab="about">ABOUT</button>
+        <button class="pw-tab" type="button" data-tab="terms">TERMS</button>
+        <button class="pw-tab" type="button" data-tab="help">HELP</button>
+        <button class="pw-tab" type="button" data-tab="feed">FEEDBACK</button>
+      </div>
+      <div class="info-pane" id="infoAbout">
+        <div class="info-copy">
+          <p>Silly Duel is a two-player party of tiny games. Play on one phone, or tap PLAY for a quick match.</p>
+          <p>Win pies, earn coins, buy looks, power-ups and play rooms. First to the match score wins. Then someone pays the bill. Or not. We do not mind.</p>
+          <p>Made for friends, siblings and anyone who laughs when a pie hits a face.</p>
+          <p class="info-credit">Developed with silliness by silly-developer <a class="info-gh" href="https://github.com/akironman" target="_blank" rel="noopener noreferrer">akironman</a></p>
+        </div>
+      </div>
+      <div class="info-pane" id="infoTerms" hidden>
+        <div class="info-copy">
+          <p>Play fair. Mini-games are for fun. Do not play while driving or in an unsafe place.</p>
+          <p>Your progress (name, level, coins and items) is saved with CrazyGames so it can follow you on this account. We do not send your details to any other site.</p>
+          <p>Ads may appear between matches. They are from CrazyGames, not from us.</p>
+        </div>
+      </div>
+      <div class="info-pane" id="infoHelp" hidden>
+        <div class="info-copy">
+          <p><b>PLAY</b> — jump into a match. Someone is waiting on the other pad.</p>
+          <p><b>PLAY WITH A FRIEND</b> — two people on this phone. Split the screen and tap your side.</p>
+          <p><b>POWERS / ARENAS</b> — buy with coins when your level is high enough.</p>
+          <p>Tap the face or name to change your look. Tap MORE any time for this help.</p>
+        </div>
+      </div>
+      <div class="info-pane" id="infoFeed" hidden>
+        <div class="info-copy">
+          <p>Tell us a bug, a funny idea, or what to add next.</p>
+        </div>
+        <p class="wd-label" id="fbStarLabel">HOW HAPPY?</p>
+        <div class="fb-stars" id="fbStars" role="radiogroup" aria-labelledby="fbStarLabel"></div>
+        <p class="fb-mood" id="fbMood"></p>
+        <label class="wd-label" for="fbMsg">YOUR NOTE</label>
+        <textarea id="fbMsg" class="on-in info-msg" maxlength="400" rows="4" placeholder="TYPE HERE"></textarea>
+        <p class="on-err" id="fbErr"></p>
+        <button class="gel" id="fbSend" type="button"><span>SEND</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section id="powers" class="screen" hidden aria-label="Power-ups">
+    <div class="wd-card pw-card-wrap">
+      <div class="page-head">
+        <button class="icon-btn pg-back" id="pwBack" type="button" aria-label="Back"></button>
+        <h2>POWER-UPS</h2>
+      </div>
+      <div class="pw-coins" id="pwCoins"></div>
+      <p class="on-note" id="pwNote"></p>
+      <div class="pw-grid" id="pwGrid"></div>
+    </div>
+  </section>
+
+  <div id="pick" hidden></div>
+
+  <section id="wardrobe" class="screen" hidden aria-label="Profile">
+    <div class="wd-card pw-card-wrap">
+      <div class="page-head">
+        <button class="icon-btn pg-back" id="wdBack" type="button" aria-label="Back"></button>
+        <h2 id="wdTitle" hidden>PROFILE</h2>
+      </div>
+      <div class="pw-tabs wd-tabs" id="wdTabs">
+        <button class="pw-tab on" id="tabLook" type="button">PROFILE</button>
+        <button class="pw-tab" id="tabAv" type="button">AVATAR</button>
+        <button class="pw-tab" id="tabCtrl" type="button">CONTROLS</button>
+      </div>
+      <div class="wd-pane" id="wdLook">
+        <div class="wd-top-row" id="wdTopRow">
+          <div class="duel-stats wd-top-stats big" id="wdStats"></div>
+        </div>
+        <div class="wd-preview" id="wdPrev"></div>
+        <div class="wd-name" id="wdName"></div>
+        <p class="wd-lock" id="wdLock" hidden></p>
+        <div class="wd-colors" id="wdColors" role="listbox" aria-label="Color"></div>
+        <label class="wd-label" for="wdNameIn">NAME</label>
+        <input id="wdNameIn" class="on-in wd-in" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <p class="on-note" id="wdSaveNote">Your progress is saved with CrazyGames.</p>
+        <p class="on-note" id="wdNameNote"></p>
+      </div>
+      <div class="wd-pane" id="wdAvatars" hidden>
+        <div class="wd-preview" id="wdPrevAv"></div>
+        <div class="wd-name" id="wdNameAv"></div>
+        <p class="wd-lock" id="wdLockAv" hidden></p>
+        <div class="pw-grid" id="wdScroll">
+          <div class="wd-grid" id="wdGrid"></div>
+        </div>
+        <div class="wd-buyrow" id="wdBuy"></div>
+      </div>
+      <div class="wd-pane" id="wdControls" hidden>
+        <p class="on-note">Where should your side of the screen be?</p>
+        <div class="st-group"><b>KEYS (PLAYER 1 / PLAYER 2)</b><div class="st-opts" id="stK"></div></div>
+        <div class="st-group"><b>PHONE, UPRIGHT</b><div class="st-opts" id="stV"></div></div>
+        <div class="st-group"><b>SIDEWAYS OR DESKTOP</b><div class="st-opts" id="stH"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="simSearch" class="screen" hidden aria-label="Searching"></section>
+
+  <div id="tapStart" hidden><button class="gel" id="tapBtn" type="button"><span>TAP TO PLAY</span></button><p>SOUND ON</p></div>
+  <div id="ask" hidden>
+    <div class="ask-card">
+      <h2 id="askTitle">LEAVE?</h2>
+      <p class="on-msg" id="askMsg"></p>
+      <button class="gel" id="askNo" type="button"><span>KEEP PLAYING</span></button>
+      <button class="gel alt" id="askYes" type="button"><span>LEAVE</span></button>
+    </div>
+  </div>
+
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <div id="flash" aria-hidden="true"></div>
+  <div class="ad-slot ad-bar" id="adBar" hidden></div>
+  <div id="adVeil" hidden aria-hidden="true">
+    <p class="ad-veil-t">ONE SEC</p>
+    <p class="ad-veil-s">A tiny break. Back to the duel in a moment.</p>
+  </div>
+</div>
+
+<script id="cgsdk" async src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+<script src="js/build.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/fit.js"></script>
+<script src="js/art.js"></script>
+<script src="js/progress.js"></script>
+<script src="js/powers.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/games/freeze.js"></script>
+<script src="js/games/dodge.js"></script>
+<script src="js/games/beat.js"></script>
+<script src="js/games/pinata.js"></script>
+<script src="js/games/bomb.js"></script>
+<script src="js/games/flap.js"></script>
+<script src="js/games/hop.js"></script>
+<script src="js/games/stack.js"></script>
+<script src="js/games/balance.js"></script>
+<script src="js/games/snack.js"></script>
+<script src="js/games/knife.js"></script>
+<script src="js/games/zigzag.js"></script>
+<script src="js/games/skip.js"></script>
+<script src="js/games/echo.js"></script>
+<script src="js/games/lander.js"></script>
+<script src="js/games/boss.js"></script>
+<script src="js/pools.js"></script>
+<script src="js/arenas.js"></script>
+<script src="js/intro.js"></script>
+<script src="js/cg.js"></script>
+<script src="js/ads.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -29,7 +29,7 @@
   var LIST = [
     { id: 'second', kind: 'common', icon: 'p_second', name: 'SECOND CHANCE', short: 'LOSS = DRAW', desc: 'If you LOSE a game, it counts as a DRAW instead. Nobody gets a point.', lvl: 2, cost: 30 },
     { id: 'lucky', kind: 'common', icon: 'p_lucky', name: 'LUCKY TIE', short: 'DRAW = WIN', desc: 'If a game ends in a DRAW, you WIN it and get the point.', lvl: 3, cost: 40 },
-    { id: 'double', kind: 'common', icon: 'p_double', name: 'DOUBLE POINT', short: 'WIN = 2 POINTS', desc: 'If you WIN a game, you get 2 points instead of 1.', lvl: 4, cost: 60 },
+    { id: 'double', kind: 'common', icon: 'p_double', name: 'DOUBLE POINT', short: 'WIN = x2 POINTS', desc: 'If you WIN a game, your points from that game are doubled.', lvl: 4, cost: 60 },
     { id: 'steal', kind: 'common', icon: 'p_steal', name: 'STEALER', short: 'RIVAL -1 POINT', desc: 'If you WIN a game, your rival LOSES 1 point.', lvl: 7, cost: 90 },
     { id: 'head', kind: 'common', icon: 'p_head', name: 'HEAD START', short: '+1 POINT NOW', desc: 'You start the match with +1 point. Used up right away.', lvl: 10, cost: 120 },
     { id: 'ghost', kind: 'game', game: 'freeze', icon: 'p_ghost', name: 'GHOST STEP', short: 'FORGIVES 1 MISTAKE', desc: 'The first time the guard catches you moving, nothing happens.', lvl: 2, cost: 35 },

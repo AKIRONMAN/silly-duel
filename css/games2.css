@@ -31,8 +31,7 @@
 @keyframes sbpop { to { transform: scale(1.35); opacity: .35; } }
 /* power slots in the pick screen, small power icons on the pad */
 .pad-pw span { display: inline-block; } .pad-pw .dim { opacity: .4; }
-.mode-row2 { margin-top: 14px; }
-.pw-tab { font-size: 11px !important; white-space: nowrap; padding: 8px 2px !important; }
+.mode-row2 { margin-top: 12px; }
 
 /* power-up cards on my pad during the intro */
 .pu { width: 100%; display: flex; flex-direction: column; gap: 6px; align-items: stretch; }

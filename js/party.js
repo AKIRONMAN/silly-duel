@@ -11,11 +11,19 @@
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function show(h) { card.innerHTML = h; }
   function bind(sel, fn) { var e = card.querySelector(sel); if (e) e.addEventListener('click', function () { au.sfx.tap(); fn(e); }); }
-  function face(p, mood) { return '<span class="tf">' + art.face(0, mood || 'idle', { skin: p.skin | 0 }) + '</span>'; }
-  function back(label) { return '<button class="gel alt on-back" id="pBack" type="button">' + art.icon('close', 22) + '<span>' + (label || 'BACK') + '</span></button>'; }
+  function confirmLeave(go, title, msg) {
+    if (!SD.ask) return go();
+    SD.ask({ title: title || 'CLOSE THIS?', msg: msg || 'You will leave and may need to start again.', yes: 'LEAVE', no: 'KEEP WAITING' }, go);
+  }
+  function face(p, mood) { return '<span class="tf">' + art.face(0, mood || 'idle', { skin: p.skin | 0, tint: p.tint | 0 }) + '</span>'; }
+  function back(label) { return '<button class="icon-btn pg-back on-back" id="pBack" type="button" aria-label="' + (label || 'BACK') + '">' + art.icon('back', 24) + '</button>'; }
   function wsUrl() { return SD.serverUrl || ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'); }
-  function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
-  function busy(title, msg) { show('<h2>' + title + '</h2><div class="on-face spin">' + art.face(0, 'worry') + '</div><p class="on-msg">' + msg + '</p>'); }
+  function busy(title, msg, onBack) {
+    show('<h2>' + title + '</h2><div class="on-face spin">' + art.face(0, 'worry') + '</div><p class="on-msg">' + msg + '</p>' + back('CANCEL'));
+    bind('#pBack', function () {
+      confirmLeave(onBack || leave, 'STOP WAITING?', 'You will leave and may need to start again.');
+    });
+  }
   /* one id per browser tab, so the server can give this player back their seat after a reconnect */
   var SID = (function () {
     var k = 'sd_sid', v = '';
@@ -23,24 +31,75 @@
     if (!v) { v = Date.now().toString(36) + Math.random().toString(36).slice(2, 10); try { sessionStorage.setItem(k, v); } catch (e) {} }
     return v;
   })();
-  function profile() { return { t: 'hello', sid: SID, name: st.name(0), level: SD.progress.info().level, skin: (st.get('skins') || [0])[0] }; }
+  function profile() { return { t: 'hello', sid: SID, name: st.name(0), level: SD.progress.info().level, skin: (st.get('skins') || [0])[0], tint: (st.get('tints') || [0])[0] | 0 }; }
 
   /* ---------- connection ---------- */
-  var lastMsg = 0, retry = null, resuming = false;
-  function connect() {
+  var lastMsg = 0, retry = null, resuming = false, connecting = null, outbox = [];
+  var hanging = false;
+  function hangUp() {
+    hanging = true;
+    var sock = ws; ws = null;
+    if (sock) { sock.onclose = null; sock.onerror = null; try { sock.close(); } catch (e) {} }
+  }
+  function send(o) {
+    if (ws && ws.readyState === 1) {
+      try { ws.send(JSON.stringify(o)); return; } catch (e) {}
+    }
+    if (o && o.t !== 'ping' && o.t !== 'hello') outbox.push(o);
+  }
+  function flushOutbox() {
+    if (!ws || ws.readyState !== 1 || !outbox.length) return;
+    var q = outbox; outbox = [];
+    q.forEach(function (o) { try { ws.send(JSON.stringify(o)); } catch (e) { outbox.push(o); } });
+  }
+  function trySocket(n) {
     return new Promise(function (res, rej) {
-      if (ws && ws.readyState === 1) return res();
-      var s, done = false, tm;
-      try { s = new WebSocket(wsUrl()); } catch (e) { return rej(e); }
-      tm = setTimeout(function () { if (!done) { done = true; s.onclose = null; try { s.close(); } catch (e) {} rej(new Error('timeout')); } }, 8000);
-      s.onopen = function () { if (done) return; done = true; clearTimeout(tm); ws = s; lastMsg = Date.now(); s.send(JSON.stringify(profile())); res(); };
-      s.onerror = function () { if (!done) { done = true; clearTimeout(tm); rej(new Error('fail')); } };
+      var s, settled = false, wait = n ? 20000 : 16000, tm;
+      function finish(err) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(tm);
+        if (!err) {
+          hanging = false;
+          ws = s; lastMsg = Date.now();
+          try { s.send(JSON.stringify(profile())); } catch (e) {}
+          flushOutbox();
+          res();
+          return;
+        }
+        try { s.onclose = null; s.onerror = null; s.close(); } catch (e) {}
+        if (n < 1) trySocket(n + 1).then(res, rej);
+        else rej(err);
+      }
+      try { s = new WebSocket(wsUrl()); } catch (e) { settled = true; if (n < 1) return trySocket(n + 1).then(res, rej); return rej(e); }
+      tm = setTimeout(function () { finish(new Error('timeout')); }, wait);
+      s.onopen = function () { finish(null); };
+      s.onerror = function () {};
       s.onmessage = function (ev) { lastMsg = Date.now(); var m; try { m = JSON.parse(ev.data); } catch (e) { return; } onMsg(m); };
-      s.onclose = function () { if (ws === s) dropped(); };
+      s.onclose = function () {
+        if (ws === s) dropped();
+        else finish(new Error('closed'));
+      };
     });
+  }
+  function connect() {
+    if (ws && ws.readyState === 1) return Promise.resolve();
+    if (connecting) return connecting;
+    connecting = trySocket(0).then(function () { connecting = null; }, function (e) { connecting = null; throw e; });
+    return connecting;
+  }
+  function needWs(then) {
+    if (ws && ws.readyState === 1) { then(); return; }
+    var t = tok, n = card && card.querySelector('.on-msg');
+    setTimeout(function () {
+      if (t !== tok || !n || !n.parentNode) return;
+      n.innerHTML = 'WAKING THE SERVER...<small>First open can take a few seconds</small>';
+    }, 2500);
+    connect().then(function () { if (t === tok) then(); }, function () { if (t === tok) noServer(); });
   }
   /* the socket died (phone switched apps, network blip): in a match that ends the match, otherwise reconnect quietly */
   function dropped() {
+    if (hanging) { ws = null; return; }
     var sock = ws; ws = null; if (sock) { sock.onclose = null; try { sock.close(); } catch (e) {} }
     if (inMatch || curConn) { V = null; if (curConn && curConn.peer.onclose) curConn.peer.onclose(); return; }
     if (watching) { reconnect(Date.now()); return; }
@@ -58,7 +117,7 @@
       if (t !== tok) return;
       connect().then(function () {
         if (t !== tok) return;
-        if (wasQueued) { send({ t: 'quick' }); renderQuickWait(0); }
+        if (wasQueued) { send({ t: 'quick', games: gamesN() }); renderQuickWait(0); }
         else if (!hadRoom) menu();
       }, function () {
         if (t !== tok) return;
@@ -77,7 +136,11 @@
     var sent = Date.now(); send({ t: 'ping' });
     setTimeout(function () { if (ws && lastMsg < sent && !document.hidden) dropped(); }, 3000);
   });
-  setInterval(function () { if (ws && !document.hidden) send({ t: 'ping' }); }, 25000);
+  setInterval(function () {
+    if (!ws || document.hidden) return;
+    if (!queued && !inMatch && !watching && (!root || root.hidden) && !V) return;
+    send({ t: 'ping' });
+  }, 25000);
   /* the room this tab is in, so a page reload (phone dropped the tab in the background) can take the seat back */
   function remember(code) { try { if (code) sessionStorage.setItem('sd_room', code); else sessionStorage.removeItem('sd_room'); } catch (e) {} }
   P.resume = function () {
@@ -93,17 +156,25 @@
     show('<h2>NO SERVER FOUND</h2><div class="on-face">' + art.face(0, 'sad') + '</div><p class="on-msg">COULD NOT REACH THE GAME SERVER<small>Online play needs the Silly Duel server. See SERVER-GUIDE.txt (local wifi or internet).</small></p>' + back('OK'));
     bind('#pBack', leave);
   }
-  function open() { var tap = document.getElementById('tapStart'); if (tap) tap.hidden = true; root.hidden = false; $('#home').hidden = true; tok++; V = null; }
+  function open() { var tap = document.getElementById('tapStart'); if (tap) tap.hidden = true; root.hidden = false; $('#home').hidden = true; tok++; V = null; if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('party'); }
   function leave() {
     tok++; clearTimeout(retry); retry = null; resuming = false; remember('');
     if (watching && SD.engine.watching && SD.engine.watching()) { watchMid = -1; watching = false; try { SD.engine.home(); } catch (e) {} }
-    send({ t: 'quickCancel' }); send({ t: 'leave' }); V = null; queued = false; watching = false;
+    if (ws && ws.readyState === 1) { send({ t: 'quickCancel' }); send({ t: 'unwatch', mid: watchMid }); send({ t: 'leave' }); }
+    hangUp();
+    outbox = []; V = null; queued = false; watching = false;
     root.hidden = true; $('#home').hidden = false; if (SD.main && SD.main.refresh) SD.main.refresh();
+    if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('home');
   }
 
   /* ---------- messages ---------- */
   function onMsg(m) {
-    if (m.t === 'hi') { myId = m.id; if (resuming) { resuming = false; if (!m.resumed) { V = null; lost(); } } }
+    if (m.t === 'full') {
+      hangUp(); queued = false;
+      show('<h2>SERVER BUSY</h2><div class="on-face">' + art.face(0, 'worry') + '</div><p class="on-msg">TOO MANY PLAYERS RIGHT NOW<small>Try again in a minute.</small></p>' + back('OK'));
+      bind('#pBack', leave);
+    }
+    else if (m.t === 'hi') { myId = m.id; if (resuming) { resuming = false; if (!m.resumed) { V = null; lost(); } } }
     else if (m.t === 'wait') { if (queued) renderQuickWait(m.n); }
     else if (m.t === 'list') showPublic(m.rooms);
     else if (m.t === 'err') { var e = $('#pErr'); if (e) e.textContent = m.e; else { show('<h2>PARTY</h2><p class="on-msg">' + esc(m.e) + '</p>' + back()); bind('#pBack', menu); } }
@@ -131,8 +202,8 @@
     var m = pending; pending = null; if (!m) return;
     var q = [], handler = null, peer = { send: function (o) { send({ t: 'relay', mid: m.mid, m: o }); }, close: function () {}, onclose: null };
     Object.defineProperty(peer, 'onmessage', { get: function () { return handler; }, set: function (f) { handler = f; if (f) q.splice(0).forEach(f); } });
-    var mine = m.you || partyMe() || { name: st.name(0), skin: (st.get('skins') || [0])[0], level: SD.progress.info().level };
-    var conn = { peer: peer, role: m.role, id: m.room || 'SERVER', you: mine, opp: m.opp || {}, myName: mine.name || st.name(0), seed: m.seed, kind: m.kind, mid: m.mid, arena: m.arena, againMe: false, againPeer: false,
+    var mine = m.you || partyMe() || { name: st.name(0), skin: (st.get('skins') || [0])[0], tint: (st.get('tints') || [0])[0] | 0, level: SD.progress.info().level };
+    var conn = { peer: peer, role: m.role, id: m.room || 'SERVER', you: mine, opp: m.opp || {}, myName: mine.name || st.name(0), seed: m.seed, kind: m.kind, mid: m.mid, arena: m.arena, total: m.total | 0, fallback: !!m.fallback, againMe: false, againPeer: false,
       deliver: function (o) { if (handler) handler(o); else q.push(o); },
       onSnap: function (snap) { send({ t: 'snap', mid: m.mid, snap: snap }); } };
     if (m.kind === 'tour') {
@@ -146,6 +217,7 @@
   /* the engine calls this when a bracket match screen is left */
   P.back = function () {
     curConn = null; inMatch = false; $('#home').hidden = true; root.hidden = false; wantReady = {};
+    if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('party');
     if (pending) return launch();
     if (V) render(); else lost();
   };
@@ -154,27 +226,47 @@
   /* ---------- screens ---------- */
   function renderQuickWait(n) {
     show('<h2>FINDING A PLAYER</h2><div class="on-face spin">' + art.face(0, 'worry') + '</div><p class="on-msg">LOOKING FOR AN OPPONENT...<small>' + (n > 1 ? n + ' PLAYERS WAITING' : 'YOU ARE FIRST IN LINE') + '</small></p>' + back('CANCEL'));
-    bind('#pBack', function () { send({ t: 'quickCancel' }); queued = false; leave(); });
+    bind('#pBack', function () {
+      confirmLeave(function () { send({ t: 'quickCancel' }); queued = false; leave(); }, 'LEAVE QUEUE?', 'You will lose your place in line.');
+    });
+  }
+  function gamesN() { var n = st.get('games') | 0; return n === 3 || n === 8 ? n : 5; }
+  function paintQuickPick() {
+    var cur = gamesN();
+    show('<h2>MATCH</h2><p class="on-msg">HOW MANY GAMES?<small>Default is 5. If nobody is waiting for your pick, you may play 5 instead.</small></p>' +
+      '<div class="games-pick">' + [3, 5, 8].map(function (n) {
+        return '<button type="button" class="games-n' + (cur === n ? ' on' : '') + '" data-n="' + n + '">' + n + '</button>';
+      }).join('') + '</div>' +
+      '<button class="gel" id="pGo" type="button"><span>FIND A PLAYER</span></button>' + back());
+    Array.prototype.forEach.call(card.querySelectorAll('.games-n'), function (b) {
+      b.addEventListener('click', function () { st.set('games', +b.dataset.n); au.sfx.tap(); paintQuickPick(); });
+    });
+    bind('#pGo', function () { au.sfx.select(); startQuick(); });
+    bind('#pBack', leave);
+  }
+  function startQuick() {
+    busy('INSTANT MATCH', 'CONNECTING...');
+    needWs(function () { queued = true; send({ t: 'quick', games: gamesN() }); renderQuickWait(0); });
   }
   P.quick = function () {
-    root = $('#party'); card = $('#partyCard'); open(); busy('INSTANT MATCH', 'CONNECTING...'); var t = tok;
-    connect().then(function () { if (t !== tok) return; queued = true; send({ t: 'quick' }); renderQuickWait(0); }, function () { if (t === tok) noServer(); });
+    root = $('#party'); card = $('#partyCard'); open(); paintQuickPick();
   };
   function menu() {
     show('<h2>FRIENDS ROOM</h2><div class="on-face">' + art.face(0, 'cheer') + '</div><p class="on-note">Private rooms need a code. Public rooms show up for anyone looking for a party. 2 players = a match. 4 or more = knockout, first to 2 wins.</p>' +
       '<button class="gel" id="pMake" type="button">' + art.icon('friend', 30) + '<span>PRIVATE ROOM</span></button>' +
       '<button class="gel" id="pPub" type="button"><span>PUBLIC ROOM</span></button>' +
       '<button class="gel alt" id="pJoin" type="button"><span>JOIN WITH A CODE</span></button>' +
-      '<button class="gel alt" id="pFind" type="button"><span>JOIN A PUBLIC PARTY</span></button>' + back());
-    bind('#pMake', function () { send({ t: 'create' }); });
-    bind('#pPub', function () { send({ t: 'create', pub: true }); });
+      '<button class="gel alt" id="pFind" type="button"><span>JOIN A PUBLIC PARTY</span></button>' +
+      '<p class="on-note" id="pNet"></p>' + back());
+    bind('#pMake', function () { busy('FRIENDS ROOM', 'MAKING A ROOM...'); needWs(function () { send({ t: 'create' }); }); });
+    bind('#pPub', function () { busy('FRIENDS ROOM', 'MAKING A ROOM...'); needWs(function () { send({ t: 'create', pub: true }); }); });
     bind('#pJoin', function () { joinForm(''); });
     bind('#pFind', publicList);
     bind('#pBack', leave);
   }
   function publicList() {
-    busy('PUBLIC PARTIES', 'LOOKING FOR OPEN ROOMS...');
-    send({ t: 'list' });
+    busy('PUBLIC PARTIES', 'LOOKING FOR OPEN ROOMS...', function () { tok++; menu(); });
+    needWs(function () { send({ t: 'list' }); });
   }
   function showPublic(list) {
     var rows = (list || []).map(function (r) {
@@ -189,18 +281,26 @@
     bind('#pAgain', publicList); bind('#pBack', menu);
   }
   P.menu = function () {
-    root = $('#party'); card = $('#partyCard'); open(); busy('FRIENDS ROOM', 'CONNECTING...'); var t = tok;
-    connect().then(function () { if (t === tok) menu(); }, function () { if (t === tok) noServer(); });
+    root = $('#party'); card = $('#partyCard'); open();
+    menu();
+    var n = card.querySelector('#pNet');
+    if (n && !(ws && ws.readyState === 1)) n.textContent = 'CONNECTING...';
+    connect().then(function () {
+      var x = card && card.querySelector('#pNet'); if (x) x.textContent = '';
+    }, function () {
+      var x = card && card.querySelector('#pNet'); if (x) x.textContent = 'SERVER SLOW TO WAKE. TAP A BUTTON TO TRY AGAIN.';
+    });
   };
   function joinForm(pre) {
     show('<h2>JOIN A ROOM</h2><input id="pCode" class="on-in code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" value="' + esc(pre) + '"><p class="on-err" id="pErr"></p><button class="gel" id="pGo" type="button"><span>JOIN</span></button>' + back());
-    var go = function () { var c = ($('#pCode').value || '').toUpperCase().replace(/[^A-Z]/g, ''); if (c.length !== 4) { $('#pErr').textContent = 'TYPE THE 4 LETTERS'; return; } send({ t: 'join', code: c }); };
+    var go = function () { var c = ($('#pCode').value || '').toUpperCase().replace(/[^A-Z]/g, ''); if (c.length !== 4) { $('#pErr').textContent = 'TYPE THE 4 LETTERS'; return; } busy('FRIENDS ROOM', 'JOINING ' + esc(c) + '...'); needWs(function () { send({ t: 'join', code: c }); }); };
     bind('#pGo', go); bind('#pBack', menu);
     if (pre && pre.length === 4) go();
   }
   P.join = function (code) {
-    root = $('#party'); card = $('#partyCard'); open(); busy('FRIENDS ROOM', 'JOINING ' + esc(code) + '...'); var t = tok;
-    connect().then(function () { if (t === tok) { joinForm(code); } }, function () { if (t === tok) noServer(); });
+    root = $('#party'); card = $('#partyCard'); open();
+    joinForm(code);
+    connect().catch(function () { noServer(); });
   };
 
   function render() {
@@ -217,7 +317,8 @@
       '<div class="tl-list">' + list + '</div><p class="on-msg tl"><small>' + n + ' / 10 PLAYERS' + (okN ? '' : n < 2 ? ' · NEED ONE MORE' : ' · NEED AN EVEN NUMBER') + '</small></p><p class="on-err" id="pErr"></p>' +
       (isHost ? '<button class="gel" id="pStart" type="button"' + (okN ? '' : ' disabled') + '><span>START' + (n >= 2 ? ' (' + n + ')' : '') + '</span></button>' : '<p class="on-msg">WAITING FOR THE HOST TO START...</p>') +
       '<button class="gel alt" id="pInv" type="button"><span>SEND INVITE</span></button>' + back('LEAVE'));
-    bind('#pStart', function () { send({ t: 'start' }); }); bind('#pInv', invite); bind('#pBack', leave);
+    bind('#pStart', function () { send({ t: 'start' }); }); bind('#pInv', invite);
+    bind('#pBack', function () { confirmLeave(leave, 'LEAVE THE ROOM?', 'Your friends will see you leave.'); });
   }
   function invite() {
     var url = location.href.split('#')[0].split('?')[0] + '?party=' + V.code, text = 'Join my Silly Duel room! Code: ' + V.code;
@@ -258,7 +359,8 @@
     }
     var watchHint = live.length ? '<p class="on-note">Tap a LIVE match to watch it in the full arena.</p>' : '';
     show('<h2>' + label + '</h2><p class="on-msg tl">' + line + '<small>' + alive + ' PLAYERS LEFT · FIRST TO 2 WINS</small></p>' + watchHint + '<div class="tms">' + V.matches.map(function (m) { return node(m, by); }).join('') + '</div>' + ready + back('LEAVE'));
-    bind('#pReady', function () { send(profile()); send({ t: 'ready', mid: mine.mid }); }); bind('#pBack', leave);
+    bind('#pReady', function () { send(profile()); send({ t: 'ready', mid: mine.mid }); });
+    bind('#pBack', function () { confirmLeave(leave, 'LEAVE THE PARTY?', 'You will drop out of this tournament.'); });
     Array.prototype.forEach.call(card.querySelectorAll('.tm.live'), function (el) {
       el.addEventListener('click', function () {
         var id = +el.dataset.mid, hit = V.matches.filter(function (x) { return x.mid === id && x.live; })[0];
@@ -283,11 +385,13 @@
     SD.engine.watch({
       a: A, b: B, totals: (wm.s || [0, 0]).slice(), total: 3, arena: Math.max(A.level | 0, B.level | 0), seed: 0,
       onStop: function () {
+        send({ t: 'unwatch', mid: wm.mid });
         watching = false;
         if (!root) return;
         root.hidden = false; $('#home').hidden = true;
         if (watchMid === wm.mid) watchMid = -1;
         if (V) render();
+        if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('party');
       }
     });
   }
@@ -295,13 +399,16 @@
     try {
       var ch = null; V.players.forEach(function (p) { if (p.id === V.champ) ch = p; });
       var me = ch && ch.id === myId;
-      show('<h2>WINNER WINNER!</h2><div class="trophy-glow"><div class="on-face big">' + art.face(0, 'win', { skin: ch ? ch.skin : 0, crown: true }) + '</div></div><p class="on-msg"><b>' + esc(ch ? ch.name : '') + '</b> WINS THE PARTY!<small>' + (me ? 'THAT IS YOU! SHARE YOUR TROPHY' : V.size + ' PLAYERS · ' + V.rounds + ' ROUNDS') + '</small></p>' +
+      show('<h2>WINNER WINNER!</h2><div class="trophy-glow"><div class="on-face big">' + art.face(0, 'win', { skin: ch ? ch.skin : 0, tint: ch ? ch.tint : 0, crown: true }) + '</div></div><p class="on-msg"><b>' + esc(ch ? ch.name : '') + '</b> WINS THE PARTY!<small>' + (me ? 'THAT IS YOU! SHARE YOUR TROPHY' : V.size + ' PLAYERS · ' + V.rounds + ' ROUNDS') + '</small></p>' +
+        '<div id="pRate" class="cere-rate"></div>' +
         (me ? '<button class="gel" id="pShare" type="button"><span>SHARE TROPHY</span></button>' : '') + back('HOME'));
       bind('#pShare', function () { try { trophy(ch); } catch (e) {} }); bind('#pBack', leave);
+      if (SD.feedback && SD.feedback.mount) SD.feedback.mount(card.querySelector('#pRate'));
       try { au.sfx.cheer(); if (SD.fx) SD.fx.confetti(window.innerWidth / 2, window.innerHeight / 3, 40, 1); setTimeout(function () { if (SD.fx && SD.fx.stop) SD.fx.stop(); }, 2800); } catch (e) {}
     } catch (e) {
-      show('<h2>WINNER WINNER!</h2><p class="on-msg">THE PARTY IS OVER</p>' + back('HOME'));
+      show('<h2>WINNER WINNER!</h2><p class="on-msg">THE PARTY IS OVER</p><div id="pRate" class="cere-rate"></div>' + back('HOME'));
       bind('#pBack', leave);
+      if (SD.feedback && SD.feedback.mount) SD.feedback.mount(card.querySelector('#pRate'));
     }
   }
   function trophy(ch) {
@@ -310,7 +417,7 @@
     g.strokeStyle = '#2a1650'; g.lineWidth = 14; g.strokeRect(24, 24, W - 48, H - 48);
     g.fillStyle = '#2a1650'; g.textAlign = 'center'; g.font = '900 64px system-ui, sans-serif'; g.fillText('WINNER WINNER!', W / 2, 140);
     g.font = '800 34px system-ui, sans-serif'; g.fillText('PARTY CHAMPION', W / 2, 196);
-    var svg = art.face(0, 'win', { skin: ch.skin | 0, crown: true }).replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420"'), img = new Image();
+    var svg = art.face(0, 'win', { skin: ch.skin | 0, tint: ch.tint | 0, crown: true }).replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420"'), img = new Image();
     img.onload = function () {
       g.drawImage(img, W / 2 - 210, 250, 420, 420);
       g.font = '900 78px system-ui, sans-serif'; g.fillText(ch.name, W / 2, 770);

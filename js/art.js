@@ -13,6 +13,44 @@ window.SD = window.SD || {};
 
   function stroke(w) { return ' stroke="' + INK + '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round"'; }
 
+  /* Mix a hex toward white so inner bits follow the chosen tint. */
+  function lite(hex, t) {
+    hex = String(hex || '#ffffff').replace('#', '');
+    if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    var n = parseInt(hex, 16); if (isNaN(n)) n = 0xffffff;
+    t = t == null ? 0.42 : t;
+    var r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    r = Math.round(r + (255 - r) * t);
+    g = Math.round(g + (255 - g) * t);
+    b = Math.round(b + (255 - b) * t);
+    return '#' + (0x1000000 + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  }
+
+  /* 10 recolors. 0 = the skin's own colors. Each tint is a different hue. */
+  var PALETTES = [
+    { name: 'OWN', fill: null, deep: null },
+    { name: 'PINK', fill: '#ff3d9a', deep: '#c21864' },
+    { name: 'SKY', fill: '#00b8f0', deep: '#0077aa' },
+    { name: 'LEMON', fill: '#ffe135', deep: '#d4a800' },
+    { name: 'MINT', fill: '#1edc72', deep: '#0e9a48' },
+    { name: 'GRAPE', fill: '#7a3dff', deep: '#4a14c4' },
+    { name: 'CORAL', fill: '#ff2a3e', deep: '#c41022' },
+    { name: 'ORANGE', fill: '#ff7a00', deep: '#c75a00' },
+    { name: 'ICE', fill: '#d7e4ff', deep: '#6d86b8' },
+    { name: 'NAVY', fill: '#1f2260', deep: '#0c0e30' }
+  ];
+  var liveTint = [null, null];
+  function slotTint(i) {
+    if (liveTint[i] != null) return liveTint[i] | 0;
+    var t = SD.store && SD.store.get('tints');
+    return t && t[i] != null ? t[i] | 0 : 0;
+  }
+  function cols(id, tint) {
+    var b = SKINS[id] || SKINS[0], p = PALETTES[tint | 0];
+    if (!p || !p.fill) return b;
+    return { name: b.name, fill: p.fill, deep: p.deep };
+  }
+
   /* 10 skins. 0 and 1 are free. Skin k (2..9) is won by beating the boss at level (k-1)*10. */
   var SKINS = [
     { name: 'KITTY', fill: '#ff8cc3', deep: '#e5559b' },
@@ -48,11 +86,11 @@ window.SD = window.SD || {};
   function ear(x, y, rot, c, s, inner) {   // rounded triangle ear
     return '<g transform="translate(' + x + ' ' + y + ') rotate(' + rot + ')"><path d="M-16 14Q-18 -10 0 -24Q18 -10 16 14Z" fill="' + c + '"' + s + '/>' + (inner ? '<path d="M-8 10Q-9 -4 0 -13Q9 -4 8 10Z" fill="' + inner + '"/>' : '') + '</g>';
   }
-  function body(id) {
-    var c = SKINS[id], s = stroke(4), d = c.deep;
+  function body(id, tint) {
+    var c = cols(id, tint), s = stroke(4), d = c.deep;
     switch (id) {
       case 0: // KITTY
-        return ear(30, 34, -18, c.fill, s, '#ffb3c6') + ear(90, 34, 18, c.fill, s, '#ffb3c6') + sq(c, s) +
+        return ear(30, 34, -18, c.fill, s, lite(c.fill)) + ear(90, 34, 18, c.fill, s, lite(c.fill)) + sq(c, s) +
           '<path d="M52 34V44M60 32V44M68 34V44" fill="none" stroke="' + d + '" stroke-width="3.5" stroke-linecap="round"/>' +
           '<path d="M6 70H20M8 82L20 77M114 70H100M112 82L100 77" fill="none"' + stroke(3) + '/>';
       case 1: // PUPPY
@@ -60,7 +98,7 @@ window.SD = window.SD || {};
           sq(c, s) + '<rect x="38" y="66" width="44" height="36" rx="16" fill="#fff" opacity=".85"/><rect x="26" y="48" width="26" height="26" rx="10" fill="' + d + '" opacity=".35"/>';
       case 2: // BUNNY
         return '<rect x="26" y="-2" width="24" height="50" rx="12" fill="' + c.fill + '"' + s + '/><rect x="70" y="-2" width="24" height="50" rx="12" fill="' + c.fill + '"' + s + '/>' +
-          '<rect x="33" y="8" width="10" height="30" rx="5" fill="#ffb3c6"/><rect x="77" y="8" width="10" height="30" rx="5" fill="#ffb3c6"/>' + sq(c, s, 14, 30, 92, 80, 30) +
+          '<rect x="33" y="8" width="10" height="30" rx="5" fill="' + lite(c.fill) + '"/><rect x="77" y="8" width="10" height="30" rx="5" fill="' + lite(c.fill) + '"/>' + sq(c, s, 14, 30, 92, 80, 30) +
           '<rect x="52" y="90" width="16" height="14" rx="4" fill="#fff"' + stroke(2.5) + '/>';
       case 3: // FROGGY
         return '<circle cx="34" cy="30" r="17" fill="' + c.fill + '"' + s + '/><circle cx="86" cy="30" r="17" fill="' + c.fill + '"' + s + '/>' + sq(c, s, 10, 34, 100, 76, 32) +
@@ -108,7 +146,7 @@ window.SD = window.SD || {};
           '<g fill="#fff"><path d="M100 50l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/><path d="M16 96l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></g>';
       case 13: // UNICORN
         return '<path d="M26 38Q4 54 14 96Q22 80 30 78Z" fill="#ff7ab8"' + stroke(3.5) + '/><path d="M22 50Q8 66 18 92" fill="none" stroke="#7fd6ff" stroke-width="5" stroke-linecap="round"/>' +
-          ear(34, 34, -10, c.fill, s, '#ffc4e8') + ear(86, 34, 10, c.fill, s, '#ffc4e8') + sq(c, s) +
+          ear(34, 34, -10, c.fill, s, lite(c.fill)) + ear(86, 34, 10, c.fill, s, lite(c.fill)) + sq(c, s) +
           '<path d="M60 0L49 34H71Z" fill="#ffd23f"' + stroke(3.5) + '/><path d="M53 22H67M55 12H65" stroke="#e08a00" stroke-width="3" stroke-linecap="round"/>' +
           '<rect x="40" y="76" width="40" height="28" rx="13" fill="#ffd9ef" opacity=".8"/><path d="M98 46l3 6 6 3-6 3-3 6-3-6-6-3 6-3z" fill="#fff"/>';
       case 14: // PHOENIX
@@ -176,12 +214,14 @@ window.SD = window.SD || {};
   function face(i, mood, opts) {
     opts = opts || {};
     var id = opts.skin != null ? opts.skin : slotSkin(i);
+    var tint = opts.tint != null ? (opts.tint | 0) : (opts.skin != null ? 0 : slotTint(i));
+    var blush = lite((cols(id, tint).fill || '#ff6f8e'), 0.2);
     var cheeks = mood === 'pied' || mood === 'dizzy' ? '' :
-      '<ellipse cx="32" cy="78" rx="7" ry="5" fill="#ff6f8e" opacity=".5"/><ellipse cx="88" cy="78" rx="7" ry="5" fill="#ff6f8e" opacity=".5"/>';
+      '<ellipse cx="32" cy="78" rx="7" ry="5" fill="' + blush + '" opacity=".55"/><ellipse cx="88" cy="78" rx="7" ry="5" fill="' + blush + '" opacity=".55"/>';
     var crown = opts.crown && id < 9 ?
       '<path d="M36 26L42 6L54 18L60 2L66 18L78 6L84 26Z" fill="#ffd23f"' + stroke(3.5) + '/><circle cx="60" cy="14" r="3" fill="#ff4d6d"/>' : '';
     return '<svg class="face f' + i + ' rar-' + TIER_OF[id] + ' m-' + (mood || 'idle') + '" viewBox="0 0 120 120" aria-hidden="true" focusable="false">' +
-      body(id) + cheeks + features(mood || 'idle') + crown + '</svg>';
+      body(id, tint) + cheeks + features(mood || 'idle') + crown + '</svg>';
   }
 
   /* --- icons: sticker style, viewBox 64 --- */
@@ -206,11 +246,13 @@ window.SD = window.SD || {};
     lock: '<rect x="14" y="28" width="36" height="28" rx="7" fill="#ffd23f"' + stroke(4) + '/><path d="M22 28V21Q22 9 32 9Q42 9 42 21V28" fill="none"' + stroke(4) + '/><circle cx="32" cy="42" r="4" fill="' + INK + '"/>',
     skull: '<path d="M12 30Q12 8 32 8Q52 8 52 30Q52 38 46 42V54H18V42Q12 38 12 30Z" fill="#fff"' + stroke(4) + '/><circle cx="24" cy="31" r="6" fill="' + INK + '"/><circle cx="40" cy="31" r="6" fill="' + INK + '"/><path d="M28 44V54M36 44V54" fill="none"' + stroke(3) + '/>',
     star: '<path d="M32 5L40 24L60 26L45 39L49 59L32 48L15 59L19 39L4 26L24 24Z" fill="#ffd23f"' + stroke(4) + '/>',
+    starOff: '<path d="M32 5L40 24L60 26L45 39L49 59L32 48L15 59L19 39L4 26L24 24Z" fill="#fff"' + stroke(4) + '/>',
     bot: '<rect x="10" y="20" width="44" height="36" rx="11" fill="#9fb8d6"' + stroke(4) + '/><path d="M32 20V10" fill="none"' + stroke(4) + '/><circle cx="32" cy="8" r="4.5" fill="#ff4d6d"' + stroke(3) + '/><circle cx="23" cy="36" r="5.5" fill="#fff"' + stroke(3) + '/><circle cx="41" cy="36" r="5.5" fill="#fff"' + stroke(3) + '/><path d="M24 47H40" fill="none"' + stroke(3.5) + '/>',
     thumbdown: '<g transform="translate(0 64) scale(1 -1)"><rect x="5" y="28" width="13" height="28" rx="3" fill="#9b6bff"' + stroke(4) + '/><path d="M22 30L31 8Q38 5 41 12L38 24H52Q59 24 57 32L53 49Q51 56 44 56H22Z" fill="#ff8aa0"' + stroke(4) + '/></g>',
     globe: '<circle cx="32" cy="32" r="24" fill="#6fcfff"' + stroke(4) + '/><path d="M20 16Q30 20 26 30Q18 34 14 28M40 34Q50 32 52 42Q46 52 38 50Q34 42 40 34Z" fill="#76e6a8"' + stroke(3) + '/><ellipse cx="24" cy="20" rx="4" ry="7" fill="#fff" opacity=".6"/>',
     offline: '<circle cx="32" cy="32" r="24" fill="#6fcfff"' + stroke(4) + '/><path d="M20 16Q30 20 26 30Q18 34 14 28M40 34Q50 32 52 42Q46 52 38 50Q34 42 40 34Z" fill="#76e6a8"' + stroke(3) + '/><ellipse cx="24" cy="20" rx="4" ry="7" fill="#fff" opacity=".6"/>' + '<path d="M10 54L54 10" stroke="#fff" stroke-width="11" stroke-linecap="round"/><path d="M10 54L54 10" stroke="#ff4d6d" stroke-width="6" stroke-linecap="round"/>',
     friend: '<circle cx="22" cy="24" r="10" fill="#ffd0e6"' + stroke(4) + '/><circle cx="44" cy="28" r="10" fill="#d4f1ff"' + stroke(4) + '/><path d="M6 56Q6 40 22 40Q38 40 38 56Z" fill="#ffd0e6"' + stroke(4) + '/><path d="M30 58Q30 44 44 44Q58 44 58 58Z" fill="#d4f1ff"' + stroke(4) + '/>',
+    playgo: '<circle cx="32" cy="32" r="24" fill="#76e6a8"' + stroke(4) + '/><path d="M26 18L48 32L26 46Z" fill="#fff"' + stroke(4) + '/>',
     medal: '<path d="M20 4L30 24M44 4L34 24" fill="none"' + stroke(5) + '/><circle cx="32" cy="40" r="18" fill="#ffd23f"' + stroke(4) + '/><path d="M32 30V50M26 35L32 30" fill="none"' + stroke(4) + '/>',
     /* plain UI icons that follow the button colour */
     music: '<path d="M24 46V14L50 8V40" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18" cy="48" r="8" fill="currentColor"/><circle cx="44" cy="42" r="8" fill="currentColor"/>',
@@ -220,7 +262,12 @@ window.SD = window.SD || {};
     again: '<path d="M50 24A20 20 0 1 0 52 36" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="M52 8V26H34" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>',
     share: '<path d="M32 40V8M20 20L32 8L44 20M12 30V54H52V30" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>',
     close: '<path d="M14 14L50 50M50 14L14 50" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
-    slash: '<path d="M10 54L54 10" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>'
+    slash: '<path d="M10 54L54 10" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
+    back: '<path d="M38 10L14 32L38 54" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 32H52" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
+    zap: '<path d="M38 5L13 37H28L23 60L51 25H35Z" fill="#9b6bff"' + stroke(4) + '/><path d="M30 16L26 28" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity=".85"/>',
+    cup: '<path d="M18 8H46V26Q46 40 32 42Q18 40 18 26Z" fill="#ff7a32"' + stroke(4) + '/><path d="M18 14H8Q8 28 20 30M46 14H56Q56 28 44 30" fill="none"' + stroke(4) + '/><path d="M32 42V50M20 58H44L42 50H22Z" fill="#ff7a32"' + stroke(4) + '/><ellipse cx="28" cy="16" rx="5" ry="7" fill="#fff" opacity=".55"/>',
+    spark: '<path d="M32 5L40 24L60 26L45 39L49 59L32 48L15 59L19 39L4 26L24 24Z" fill="#ff4d6d"' + stroke(4) + '/><path d="M32 16L35 26" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity=".85"/>',
+    more: '<circle cx="14" cy="32" r="6" fill="currentColor"/><circle cx="32" cy="32" r="6" fill="currentColor"/><circle cx="50" cy="32" r="6" fill="currentColor"/>'
   };
 
   function icon(name, size, cls) {
@@ -229,10 +276,11 @@ window.SD = window.SD || {};
   }
 
   SD.art = {
-    CHARS: CHARS, SKINS: SKINS, INK: INK, face: face, icon: icon, slotSkin: slotSkin,
+    CHARS: CHARS, SKINS: SKINS, PALETTES: PALETTES, INK: INK, face: face, icon: icon, slotSkin: slotSkin, slotTint: slotTint,
     skinName: function (id) { return SKINS[id].name; },
     addIcons: function (o) { Object.keys(o).forEach(function (k) { ICONS[k] = o[k]; }); },
     setLive: function (i, id) { live[i] = id; },
+    setLiveTint: function (i, t) { liveTint[i] = t; },
     botSkin: function () { var mine = slotSkin(0); return mine === 7 ? 6 : 7; },     // the bot is always ROBO (GHOSTY if you wear ROBO)
     tiers: TIERS, rarity: function (id) { var t = TIERS[TIER_OF[id]]; return { rank: TIER_OF[id], id: t.id, name: t.name, color: t.color }; },
     skinReq: function (id) { return { lvl: REQ[id][0], cost: REQ[id][1] }; },

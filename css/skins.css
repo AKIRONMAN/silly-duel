@@ -17,6 +17,10 @@
 .face.rar-5 { animation: mythGlow 2.4s linear infinite; }
 @keyframes mythGlow { 0% { filter: drop-shadow(0 0 7px #ff4fd8) drop-shadow(0 0 14px #ff4fd8); } 33% { filter: drop-shadow(0 0 7px #ffd23f) drop-shadow(0 0 14px #ffd23f); } 66% { filter: drop-shadow(0 0 7px #4dd2ff) drop-shadow(0 0 14px #4dd2ff); } 100% { filter: drop-shadow(0 0 7px #ff4fd8) drop-shadow(0 0 14px #ff4fd8); } }
 .wd-tile.locked .face { filter: none; animation: none; }
-.wd-preview .face.shade, .shade { animation: none !important; }
+.wd-preview.locked::before { opacity: 0 !important; animation: none !important; }
+.wd-preview.locked svg, .wd-preview .face.shade, .shade {
+  animation: none !important;
+  filter: brightness(0) opacity(.32) blur(2px) !important;
+}
 .wd-preview { isolation: isolate; }
 .face { overflow: visible; }

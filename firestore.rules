@@ -2,43 +2,215 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Profiles: anyone can read (leaderboard). You can only write your own,
-    // and online wins can only go up by a few at a time.
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users (Google accounts only — TOP 100)
+    // Document ID: Firebase Auth uid
+    // Fields: name (string 1-14), level (int 1-200), skin (int 0-40),
+    //   tint (int 0-9), owins (int 0-500), ts (int)
+    // Public read. Owner Google write. Level/owins change by at most 1.
+    //
+    // Collection: saves (guests + Google)
+    // Document ID: Firebase Auth uid
+    // Fields: name, level, xp, coins, pies0, pies1, wins, losses, owins,
+    //   olosses, unlocked (list), rooms (list), skins (list of 2),
+    //   tints (list of 2), inv (map id->0..9), arena (string), ts (int)
+    // Owner-only. Create is a fresh starter save. Updates may raise
+    // level by 1, coins by 80, one extra skin, one extra room, and
+    // each power-up count by 1. Opaque JSON blobs are not allowed.
+    //
+    // Collection: lobby — authenticated read, owner write
+    // Collection: rooms / ice — authenticated matchmaking handshake
+    // Collection: feedback — authenticated create only (uid, name, msg, stars 1-5, ts)
+    //
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+    function isGoogleUser() {
+      return isAuthenticated()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    function validName() {
+      return request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 14;
+    }
+    function validTs() {
+      return request.resource.data.ts is int
+        && request.resource.data.ts > 0
+        && request.resource.data.ts <= request.time.toMillis() + 120000;
+    }
+    function intIn(v, lo, hi) {
+      return v is int && v >= lo && v <= hi;
+    }
+
+    function isValidUser() {
+      return hasOnlyAllowedFields(['name', 'level', 'skin', 'tint', 'owins', 'ts'])
+        && hasRequiredFields(['name', 'level', 'skin', 'tint', 'owins', 'ts'])
+        && validName()
+        && intIn(request.resource.data.level, 1, 200)
+        && intIn(request.resource.data.skin, 0, 40)
+        && intIn(request.resource.data.tint, 0, 9)
+        && intIn(request.resource.data.owins, 0, 500)
+        && validTs();
+    }
+
+    function invSlot(id) {
+      return !(id in request.resource.data.inv)
+        || intIn(request.resource.data.inv[id], 0, 9);
+    }
+    function invOk() {
+      return request.resource.data.inv is map
+        && request.resource.data.inv.size() <= 20
+        && invSlot('second') && invSlot('lucky') && invSlot('double')
+        && invSlot('steal') && invSlot('head') && invSlot('ghost')
+        && invSlot('umbrella') && invSlot('wide') && invSlot('gold')
+        && invSlot('defuse') && invSlot('gap') && invSlot('pads')
+        && invSlot('glue') && invSlot('pole') && invSlot('shield')
+        && invSlot('slowlog') && invSlot('net') && invSlot('slowrope')
+        && invSlot('echo2') && invSlot('tank');
+    }
+    function invSlotDelta(id) {
+      let n = request.resource.data.inv;
+      let o = resource.data.inv;
+      let nv = (id in n) ? n[id] : 0;
+      let ov = (o is map && id in o) ? o[id] : 0;
+      return nv is int && nv >= 0 && nv <= 9 && nv <= ov + 1;
+    }
+    function invDeltaOk() {
+      return invSlotDelta('second') && invSlotDelta('lucky') && invSlotDelta('double')
+        && invSlotDelta('steal') && invSlotDelta('head') && invSlotDelta('ghost')
+        && invSlotDelta('umbrella') && invSlotDelta('wide') && invSlotDelta('gold')
+        && invSlotDelta('defuse') && invSlotDelta('gap') && invSlotDelta('pads')
+        && invSlotDelta('glue') && invSlotDelta('pole') && invSlotDelta('shield')
+        && invSlotDelta('slowlog') && invSlotDelta('net') && invSlotDelta('slowrope')
+        && invSlotDelta('echo2') && invSlotDelta('tank');
+    }
+
+    function isValidSave() {
+      let d = request.resource.data;
+      return hasOnlyAllowedFields(['name', 'level', 'xp', 'coins', 'pies0', 'pies1', 'wins', 'losses', 'owins', 'olosses', 'unlocked', 'rooms', 'skins', 'tints', 'inv', 'arena', 'ts'])
+        && hasRequiredFields(['name', 'level', 'xp', 'coins', 'pies0', 'pies1', 'wins', 'losses', 'owins', 'olosses', 'unlocked', 'rooms', 'skins', 'tints', 'inv', 'arena', 'ts'])
+        && validName()
+        && intIn(d.level, 1, 200)
+        && intIn(d.xp, 0, 10)
+        && intIn(d.coins, 0, 999999)
+        && intIn(d.pies0, 0, 99999)
+        && intIn(d.pies1, 0, 99999)
+        && intIn(d.wins, 0, 99999)
+        && intIn(d.losses, 0, 99999)
+        && intIn(d.owins, 0, 500)
+        && intIn(d.olosses, 0, 99999)
+        && d.unlocked is list && d.unlocked.size() >= 2 && d.unlocked.size() <= 16
+        && d.rooms is list && d.rooms.size() >= 1 && d.rooms.size() <= 10
+        && d.rooms.hasAny(['bubble'])
+        && d.skins is list && d.skins.size() == 2
+        && intIn(d.skins[0], 0, 15) && intIn(d.skins[1], 0, 15)
+        && d.tints is list && d.tints.size() == 2
+        && intIn(d.tints[0], 0, 9) && intIn(d.tints[1], 0, 9)
+        && d.arena is string && d.arena.size() <= 16
+        && invOk()
+        && validTs();
+    }
+    function isStarterSave() {
+      let d = request.resource.data;
+      return d.level == 1 && d.xp == 0 && d.coins == 0
+        && d.owins == 0
+        && d.unlocked.size() == 2
+        && d.rooms.size() == 1
+        && d.inv.size() == 0;
+    }
+    function migratingFromBlob() {
+      return !('level' in resource.data) && ('d' in resource.data);
+    }
+    function saveDeltaOk() {
+      let n = request.resource.data;
+      let o = resource.data;
+      return n.level <= o.level + 1 && n.level >= o.level - 1
+        && n.coins <= o.coins + 80
+        && n.owins >= o.owins && n.owins - o.owins <= 1
+        && n.pies0 <= o.pies0 + 8 && n.pies1 <= o.pies1 + 8
+        && n.wins <= o.wins + 8 && n.losses <= o.losses + 8
+        && n.unlocked.size() <= o.unlocked.size() + 1
+        && n.rooms.size() <= o.rooms.size() + 1
+        && invDeltaOk();
+    }
+    function isValidLobby() {
+      return hasOnlyAllowedFields(['uid', 'name', 'level', 'skin', 'tint', 'room', 'ts'])
+        && hasRequiredFields(['uid', 'name', 'level', 'skin', 'tint', 'room', 'ts'])
+        && request.resource.data.uid == request.auth.uid
+        && validName()
+        && intIn(request.resource.data.level, 1, 200)
+        && intIn(request.resource.data.skin, 0, 40)
+        && intIn(request.resource.data.tint, 0, 9)
+        && request.resource.data.room is string
+        && request.resource.data.room.size() > 0
+        && request.resource.data.room.size() <= 64
+        && validTs();
+    }
+
     match /users/{uid} {
       allow read: if true;
-      allow create: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.name is string && request.resource.data.name.size() <= 14
-        && request.resource.data.level is int && request.resource.data.level >= 1 && request.resource.data.level <= 200
-        && request.resource.data.owins is int && request.resource.data.owins >= 0 && request.resource.data.owins <= 500;
-      allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.name is string && request.resource.data.name.size() <= 14
-        && request.resource.data.level is int && request.resource.data.level >= 1 && request.resource.data.level <= 200
-        && request.resource.data.owins is int && request.resource.data.owins >= 0
-        && request.resource.data.owins - resource.data.owins <= 5;
-      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow create: if isOwner(uid) && isGoogleUser() && isValidUser();
+      allow update: if isOwner(uid) && isGoogleUser()
+        && isValidUser()
+        && request.resource.data.level <= resource.data.level + 1
+        && request.resource.data.level >= resource.data.level - 1
+        && request.resource.data.owins >= resource.data.owins
+        && request.resource.data.owins - resource.data.owins <= 1;
+      allow delete: if isOwner(uid) && isGoogleUser();
     }
 
-    // Full private save of a signed-in player (level, coins, skins, power-ups, rooms, settings).
-    // Only the owner can read, write or delete it.
     match /saves/{uid} {
-      allow read, delete: if request.auth != null && request.auth.uid == uid;
-      allow write: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.d is string && request.resource.data.d.size() < 60000
-        && request.resource.data.ts is int;
+      allow read, delete: if isOwner(uid);
+      allow create: if isOwner(uid) && isValidSave() && isStarterSave();
+      allow update: if isOwner(uid) && isValidSave()
+        && (migratingFromBlob() || saveDeltaOk());
     }
 
-    // People waiting for a quick match. Only the owner writes their own entry.
     match /lobby/{uid} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == uid;
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(uid) && isValidLobby();
+      allow delete: if isOwner(uid);
     }
 
-    // Rooms are only used for the first hello between two phones, then deleted.
     match /rooms/{room} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAuthenticated();
       match /ice/{doc} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isAuthenticated();
       }
+    }
+
+    match /feedback/{id} {
+      allow create: if isAuthenticated()
+        && hasOnlyAllowedFields(['uid', 'name', 'msg', 'stars', 'ts'])
+        && hasRequiredFields(['uid', 'name', 'msg', 'stars', 'ts'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 14
+        && request.resource.data.msg is string
+        && request.resource.data.msg.size() <= 400
+        && intIn(request.resource.data.stars, 1, 5)
+        && validTs();
+      allow read, update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

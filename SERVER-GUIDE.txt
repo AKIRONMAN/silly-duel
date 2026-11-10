@@ -12,14 +12,12 @@ A) PLAY ON LOCAL WIFI OR A HOTSPOT (no internet needed)
    Keep the server window open. The game files come from the server too, so nothing else is needed.
    Tip: if friends cannot open the address, allow Node through the computer's firewall, and make sure the hotspot does not have "client isolation" on.
 
-B) PLAY OVER THE INTERNET
-   Put the whole folder on any Node host and run "npm start" (it reads the PORT variable):
-     - Render.com: New > Web Service > connect the repo, Start Command: npm start (free plan sleeps after 15 min idle, first request wakes it)
-     - Railway / Fly.io / any $5 VPS: same command.
-   Share the address it gives you (https://something.onrender.com). Players open it and play. Nothing else to configure.
-
-   If you keep the game files on GitHub Pages or CrazyGames-style static hosting and the server somewhere else, edit js/server-config.js:
-          SD.serverUrl = 'wss://your-server.onrender.com/ws';
+B) PLAY OVER THE INTERNET (recommended)
+   Split it so the $7 Render box only does MATCH/ROOM/PARTY:
+     - Game website: Firebase Hosting (see DEPLOY.md). Players open https://silly-duel.web.app
+     - Render: npm start. It skips game files on Render by itself. Health: /health  (ok 12/250)
+   js/server-config.js already has  wss://silly-duel.onrender.com/ws
+   If the server is full, MATCH/ROOM show SERVER BUSY.
 
 C) HOW THE MODES WORK
    MATCH  : instant match with someone waiting, closest level first. Ranked (counts for level and coins).
@@ -30,4 +28,4 @@ C) HOW THE MODES WORK
             With 6 or 10 players a round can have an odd number of winners, so one random winner gets a bye.
    Arena: the play room is the one of the higher-level player in the pair.
 
-D) HEALTH CHECK: open /health on the server address, it says "ok".
+D) HEALTH CHECK: open /health on the Render address. You should see  ok 12/250  (live sockets / cap), not the game page.

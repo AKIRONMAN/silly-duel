@@ -1,4 +1,4 @@
-/* Where the Silly Duel server lives.
-   - Leave '' when the game is opened from the server itself (node server/server.js, or a Render/Railway deploy): it uses the same address.
-   - If the game files are on GitHub Pages and the server is somewhere else, put its address here, e.g.  'wss://silly-duel.onrender.com/ws' */
+/* Where the MATCH / ROOM / PARTY WebSocket lives (Render).
+   The website itself should be on Firebase Hosting. Render is sockets only.
+   Leave '' only when you open the game from node server/server.js on local wifi. */
 SD.serverUrl = 'wss://silly-duel.onrender.com/ws';
