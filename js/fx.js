@@ -24,7 +24,7 @@ window.SD = window.SD || {};
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
 
   function add(p) {
-    if (parts.length > 600) return;
+    if (parts.length > 220) return;
     parts.push(p);
     if (!running) { running = true; last = performance.now(); requestAnimationFrame(loop); }
   }

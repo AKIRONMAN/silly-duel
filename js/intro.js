@@ -87,15 +87,29 @@
   }
   function $$(s, p) { return Array.prototype.slice.call(document.querySelectorAll((p ? p + ' ' : '') + s)); }
 
+  function seen() {
+    try {
+      if (SD.store && SD.store.extraGet && SD.store.extraGet('sd_intro')) return true;
+      if (typeof localStorage !== 'undefined' && localStorage.getItem('sd_intro')) return true;
+      if (SD.store && (SD.store.get('plays') | 0) > 0) return true;
+    } catch (e) {}
+    return false;
+  }
+  function markSeen() {
+    try { if (SD.store && SD.store.extraSet) SD.store.extraSet('sd_intro', '1'); else localStorage.setItem('sd_intro', '1'); } catch (e) {}
+  }
+
   function finish() {
     if (finished) return; finished = true; timers.forEach(clearTimeout); timers = [];
     if (root) { root.classList.add('out'); var r = root; setTimeout(function () { r.remove(); }, 500); }
-    try { if (SD.store && SD.store.extraSet) SD.store.extraSet('sd_intro', '1'); else localStorage.setItem('sd_intro', '1'); } catch (e) {}
+    markSeen();
     if (cb) { var f = cb; cb = null; f(); }
   }
 
   SD.intro = {
+    seen: seen,
     play: function (done) {
+      if (seen()) { if (done) done(); return; }
       cb = done; finished = false;
       root = document.createElement('div'); root.id = 'intro';
       root.innerHTML = '<div class="in-bgshapes"></div><div class="in-stage"></div><div class="in-bar"><i></i></div><button type="button" class="in-skip">SKIP</button>';

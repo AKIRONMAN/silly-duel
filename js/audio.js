@@ -250,6 +250,25 @@ window.SD = window.SD || {};
     { r: 54, sc: 'min', bpm: 150, pr: [0, 5, 3, 6], lead: 'pulse', bass: 'oct', dr: 'rock', arp: 1 },         // PHOENIX: rising
     { r: 57, sc: 'lyd', bpm: 130, pr: [0, 4, 1, 5], lead: 'bell', bass: 'walk', dr: 'four', arp: 1 }          // PRISM: shimmering
   ];
+  /* one original song per play room (same tiny composer, different seed + vibe) */
+  var ARENA_THEMES = {
+    bubble: { r: 67, sc: 'maj', bpm: 156, pr: [0, 4, 5, 4], lead: 'square', bass: 'oct', dr: 'four', arp: 1 },
+    beach:  { r: 53, sc: 'mix', bpm: 118, pr: [0, 3, 4, 5], lead: 'tri', bass: 'tri', dr: 'shuf', arp: 0 },
+    candy:  { r: 65, sc: 'pent', bpm: 126, pr: [0, 2, 4, 3], lead: 'bell', bass: 'oct', dr: 'four', arp: 1 },
+    disco:  { r: 57, sc: 'dor', bpm: 124, pr: [0, 4, 3, 5], lead: 'saw', bass: 'walk', dr: 'break', arp: 0 },
+    snow:   { r: 62, sc: 'lyd', bpm: 108, pr: [0, 1, 4, 5], lead: 'sine', bass: 'tri', dr: 'half', arp: 1 },
+    jungle: { r: 50, sc: 'phr', bpm: 134, pr: [0, 6, 3, 5], lead: 'pulse', bass: 'oct', dr: 'rock', arp: 1 },
+    lava:   { r: 46, sc: 'hmin', bpm: 140, pr: [0, 5, 3, 6], lead: 'saw', bass: 'walk', dr: 'half', arp: 0 },
+    neon:   { r: 52, sc: 'min', bpm: 146, pr: [0, 5, 2, 6], lead: 'pulse', bass: 'oct', dr: 'break', arp: 1 },
+    cloud:  { r: 60, sc: 'maj', bpm: 114, pr: [0, 3, 5, 4], lead: 'bell', bass: 'tri', dr: 'half', arp: 1 },
+    throne: { r: 48, sc: 'mix', bpm: 100, pr: [0, 4, 5, 3], lead: 'brass', bass: 'tri', dr: 'four', arp: 0 }
+  };
+  function themeSeed(id) {
+    if (typeof id === 'number') return id;
+    var h = 317, s = String(id || ''), i;
+    for (i = 0; i < s.length; i++) h = (h * 33 + s.charCodeAt(i)) >>> 0;
+    return (h % 900) + 200;
+  }
   function rngOf(seed) { var a = seed >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
   var RHY = ['x.xx.x.x', 'x..xx.x.', 'xxx.x.x.', 'x.x.xxx.', 'x.xxx.x.', 'x..x.xx.', 'xx.xx.x.', 'x.x.x.xx'];
   /* build a 64-step melody (8 bars of 8 eighth-notes) over the chord loop: A phrase, B phrase */
@@ -330,13 +349,25 @@ window.SD = window.SD || {};
   function curSkin() { try { var sk = SD.store.get('skins'); var id = sk && sk[0] | 0; return id >= 0 && id < THEMES.length ? id : 1; } catch (e) { return 1; } }
   function musicStart(mode, skin) {
     want = mode;
+    if (mode === 'arena' && typeof skin === 'string' && skin) seq.id = skin;
     if (!on.music) return;
     var a = ensure(); if (!a) return;
-    var id = skin != null ? skin : curSkin();
+    var th, id, calm, seed;
+    if (mode === 'arena') {
+      id = (typeof skin === 'string' && skin) || (typeof seq.id === 'string' ? seq.id : 'bubble');
+      th = ARENA_THEMES[id] || ARENA_THEMES.bubble;
+      calm = false;
+      seed = themeSeed(id);
+    } else {
+      id = skin != null && skin !== '' ? +skin : curSkin();
+      if (!(id >= 0 && id < THEMES.length)) id = curSkin();
+      th = THEMES[id] || THEMES[1];
+      calm = mode === 'menu';
+      seed = id;
+    }
     if (seq.timer && seq.mode === mode && seq.id === id) return;
     if (seq.timer) clearInterval(seq.timer);
-    var th = THEMES[id], calm = mode === 'menu';
-    seq.mode = mode; seq.id = id; seq.th = th; seq.song = compose(th, id, calm); seq.step = 0;
+    seq.mode = mode; seq.id = id; seq.th = th; seq.song = compose(th, seed, calm); seq.step = 0;
     seq.dur = 60 / (th.bpm * (calm ? 0.82 : 1)) / 2; seq.next = a.currentTime + 0.08;
     if (!musDelay) {                                           // a soft echo makes the little synths sound bigger
       var dl = a.createDelay(1), fb = a.createGain(), wet = a.createGain();
@@ -355,7 +386,7 @@ window.SD = window.SD || {};
     seq.mode = null;
     if (ac && musBus) musBus.gain.setTargetAtTime(0.0001, ac.currentTime, 0.08);
   }
-  function musicRefresh() { var m = want; if (m && seq.timer) { seq.id = -1; musicStart(m); } }
+  function musicRefresh() { var m = want; if (m && seq.timer) { var keep = seq.id; seq.id = null; musicStart(m, keep); } }
 
   /* ---------- silly announcer (uses the phone's own text to speech) ---------- */
   var voice = null;
@@ -390,6 +421,11 @@ window.SD = window.SD || {};
     sfx: sfx, inflate: inflate, say: say, setOn: setOn, setPaused: setPaused,
     unlock: unlock, running: function () { return !!ac && ac.state === 'running'; },
     isOn: function (k) { return on[k]; },
-    music: { start: musicStart, stop: musicStop, refresh: musicRefresh, debug: { compose: compose, themes: THEMES }, preview: function (skin) { musicStart('menu', skin); } }
+    music: {
+      start: musicStart, stop: musicStop, refresh: musicRefresh,
+      debug: { compose: compose, themes: THEMES, arenas: ARENA_THEMES },
+      preview: function (skin) { musicStart('menu', skin); },
+      arena: function (id) { musicStart('arena', id); }
+    }
   };
 })();

@@ -12,7 +12,7 @@
     $('#home').hidden = true;
     PAGES.forEach(function (k) { var n = document.getElementById(k); if (n) n.hidden = k !== id; });
     if (pageStack[pageStack.length - 1] !== id) pageStack.push(id);
-    if (SD.ads && SD.ads.onScreen) SD.ads.onScreen(id);
+    try { if (SD.ads && SD.ads.onScreen) SD.ads.onScreen(id); } catch (e) {}
   }
   function pageClose(id) {
     id = pageId(id);
@@ -27,13 +27,13 @@
       if (p) {
         p.hidden = false;
         if (prev === 'wardrobe') { paintSave(); if (wdSlot === 0) { var s = $('#wdStats'); if (s) s.innerHTML = playerStatsHtml(true, true); } }
-        if (SD.ads && SD.ads.onScreen) SD.ads.onScreen(prev);
+        try { if (SD.ads && SD.ads.onScreen) SD.ads.onScreen(prev); } catch (e) {}
         return;
       }
     }
     pageStack = [];
     $('#home').hidden = false; refresh();
-    if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('home');
+    try { if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('home'); } catch (e) {}
   }
   SD.page = { open: pageOpen, close: pageClose };
   SD.ask = function (opts, onYes) {
@@ -171,21 +171,81 @@
   }
   function openOffline() { renderOffline(); pageOpen('offline'); }
 
-  /* ---------- power-up shop (markup from /screens/powers.html) ---------- */
+  /* ---------- power-up shop (built in JS so file:// and slow fetch cannot hang) ---------- */
   function fillCoins(el, coins, lvl) {
     if (!el) return;
     el.innerHTML = art.icon('bill', 24) + '<b>' + fmtCoin(coins) + '</b><small>LV ' + lvl + '</small>';
   }
-  function loadScreen(el, url) {
-    if (!el || el.dataset.ready === '1') return Promise.resolve(el);
-    return fetch(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : Promise.reject(); })
-      .then(function (html) { el.innerHTML = html; el.dataset.ready = '1'; return el; });
+  function shopHtml() {
+    var pw = SD.powers, secs = [
+      { t: 'WORK IN EVERY GAME', list: pw.list.filter(function (p) { return p.kind === 'common'; }) },
+      { t: 'GAMES 1-5', list: pw.list.filter(function (p) { return p.kind === 'game' && ['freeze', 'dodge', 'beat', 'pinata', 'bomb'].indexOf(p.game) >= 0; }) },
+      { t: 'GAMES 6-10', list: pw.list.filter(function (p) { return p.kind === 'game' && ['flap', 'hop', 'stack', 'balance', 'snack'].indexOf(p.game) >= 0; }) },
+      { t: 'GAMES 11-15', list: pw.list.filter(function (p) { return p.kind === 'game' && ['knife', 'zig', 'skip', 'echo', 'lander'].indexOf(p.game) >= 0; }) }
+    ];
+    return secs.map(function (s) {
+      return '<h3 class="pw-sec">' + s.t + '</h3><div class="pw-sgrid">' + s.list.map(function (p) {
+        return '<div class="pw-card" data-id="' + p.id + '" data-lvl="' + p.lvl + '"><div class="pw-ico" data-icon="' + p.icon + '"></div><b class="pw-name"></b><span class="pw-desc"></span><div class="pw-foot"><span class="pw-own">HAVE 0</span><button type="button" class="pw-buy" data-id="' + p.id + '" disabled>…</button></div></div>';
+      }).join('') + '</div>';
+    }).join('');
+  }
+  var arI = 0, arSwipe = 0;
+  function arenasHtml() {
+    return SD.arenas.list.map(function (a) {
+      return '<button type="button" class="ar-card" data-id="' + a.id + '" data-lvl="' + a.lvl + '"><span class="ar-thumb" style="background:' + a.bg + '"></span><b class="ar-name"></b><span class="ar-desc"></span><span class="ar-prev" data-id="' + a.id + '">PREVIEW</span></button>';
+    }).join('');
+  }
+  function playArenaTune(id) {
+    try { if (au.music && au.music.arena) au.music.arena(id); } catch (e) {}
+  }
+  function restoreMenuTune() {
+    try { au.music.start('menu'); } catch (e) {}
+  }
+  function paintArenaDots() {
+    var dots = $('#arDots'); if (!dots) return;
+    var list = SD.arenas.list;
+    if (dots.dataset.ready !== '1') {
+      dots.innerHTML = list.map(function (a, i) {
+        return '<button type="button" data-i="' + i + '" aria-label="' + a.name + '"></button>';
+      }).join('');
+      dots.dataset.ready = '1';
+    }
+    Array.prototype.forEach.call(dots.children, function (d, k) {
+      d.classList.toggle('on', k === arI);
+    });
+  }
+  function showArenaCard(i, opts) {
+    opts = opts || {};
+    var list = SD.arenas.list, n = list.length, grid = $('#arGrid');
+    if (!n || !grid) return;
+    arI = ((i % n) + n) % n;
+    Array.prototype.forEach.call(grid.querySelectorAll('.ar-card'), function (c, k) {
+      c.classList.remove('on', 'rev');
+      if (k === arI) {
+        c.classList.add('on');
+        if (opts.dir < 0) c.classList.add('rev');
+      }
+    });
+    paintArenaDots();
+    if (opts.sfx) { try { au.sfx.whoosh(); } catch (e) {} }
+    if (opts.music !== false && list[arI]) playArenaTune(list[arI].id);
+  }
+  function stepArena(d) {
+    showArenaCard(arI + d, { dir: d, sfx: true, music: true });
+  }
+  function fillGrid(el, html) {
+    if (!el) return el;
+    if (el.dataset.ready !== '1') { el.innerHTML = html; el.dataset.ready = '1'; }
+    return el;
   }
   function hydrateShop() {
+    var grid = $('#pwGrid'); if (!grid) return;
     var pw = SD.powers, lvl = st.get('level') | 0, coins = st.get('coins') | 0;
+    fillGrid(grid, shopHtml());
     fillCoins($('#pwCoins'), coins, lvl);
-    $('#pwNote').textContent = 'Prices go up 10 coins every level. You can hold up to ' + pw.cap + ' of each.';
-    Array.prototype.forEach.call($('#pwGrid').querySelectorAll('.pw-card'), function (card) {
+    var note = $('#pwNote');
+    if (note) note.textContent = 'Prices go up 10 coins every level. You can hold up to ' + pw.cap + ' of each.';
+    Array.prototype.forEach.call(grid.querySelectorAll('.pw-card'), function (card) {
       var id = card.dataset.id, p = pw.by[id]; if (!p) return;
       var why = pw.canBuy(id), locked = why === 'LEVEL', pr = pw.price(id);
       var ico = card.querySelector('.pw-ico');
@@ -200,39 +260,41 @@
         buy.innerHTML = locked ? 'LV ' + p.lvl : why === 'COINS' ? 'NEED ' + pr : why === 'FULL' ? 'FULL' : art.icon('bill', 16) + pr;
       }
     });
-    if ($('#pwGrid').dataset.bound === '1') return;
-    $('#pwGrid').dataset.bound = '1';
-    $('#pwGrid').addEventListener('click', function (e) {
-      var b = e.target.closest ? e.target.closest('.pw-buy') : null; if (!b || !$('#pwGrid').contains(b)) return;
+    if (grid.dataset.bound === '1') return;
+    grid.dataset.bound = '1';
+    grid.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('.pw-buy') : null; if (!b || !grid.contains(b)) return;
       if (pw.buy(b.dataset.id)) { au.sfx.coin(); au.sfx.perfect(); buildCoins(); hydrateShop(); } else au.sfx.bwoop();
     });
   }
-  function renderShop() {
-    loadScreen($('#pwGrid'), 'screens/powers.html').then(hydrateShop, hydrateShop);
-  }
+  function renderShop() { hydrateShop(); }
   function hydrateArenas() {
+    var grid = $('#arGrid'); if (!grid) return;
+    fillGrid(grid, arenasHtml());
     var A = SD.arenas, cur = A.current(), lvl = st.get('level') | 0;
     fillCoins($('#arCoins'), st.get('coins') | 0, lvl);
-    Array.prototype.forEach.call($('#arGrid').querySelectorAll('.ar-card'), function (b) {
+    Array.prototype.forEach.call(grid.querySelectorAll('.ar-card'), function (b) {
       var a = A.byId(b.dataset.id); if (!a) return;
       var t = A.state(a), locked = t === 'shadow';
       b.classList.toggle('locked', locked);
       b.classList.toggle('sel', t === 'own' && cur.id === a.id);
       var th = b.querySelector('.ar-thumb');
-      if (th && a.scene) th.innerHTML = String(a.scene).replace('viewBox="0 0 390 780"', 'viewBox="0 0 390 340"');
+      if (th && a.scene) th.innerHTML = String(a.scene).replace('viewBox="0 0 390 780"', 'viewBox="0 0 390 390"');
       var lock = b.querySelector('.ar-lock'); if (lock) lock.remove();
-      if (locked) { var i = document.createElement('span'); i.innerHTML = art.icon('lock', 20, 'ar-lock'); b.insertBefore(i.firstChild, b.querySelector('.ar-name')); }
+      if (locked) { var i = document.createElement('span'); i.innerHTML = art.icon('lock', 26, 'ar-lock'); b.insertBefore(i.firstChild, b.querySelector('.ar-name')); }
       var nm = b.querySelector('.ar-name'); if (nm) nm.textContent = locked ? '???' : a.name;
       var ds = b.querySelector('.ar-desc');
       if (ds) ds.textContent = locked ? 'UNLOCKS AT LEVEL ' + a.lvl : t === 'buy' ? 'BUY · ' + a.cost + ' COINS' : (cur.id === a.id ? 'IN USE' : 'TAP TO USE');
     });
-    if ($('#arGrid').dataset.bound === '1') return;
-    $('#arGrid').dataset.bound = '1';
-    $('#arGrid').addEventListener('click', function (e) {
+    showArenaCard(arI, { music: false });
+    if (grid.dataset.bound === '1') return;
+    grid.dataset.bound = '1';
+    grid.addEventListener('click', function (e) {
+      if (Date.now() - arSwipe < 280) return;
       var prev = e.target.closest ? e.target.closest('.ar-prev') : null;
       var card = e.target.closest ? e.target.closest('.ar-card') : null;
       if (prev && card) { e.stopPropagation(); previewArena(card.dataset.id); return; }
-      if (!card || !$('#arGrid').contains(card)) return;
+      if (!card || !grid.contains(card)) return;
       var a = A.byId(card.dataset.id), t = A.state(a);
       if (t === 'own') { A.pin(a.id); au.sfx.coin(); }
       else if (t === 'buy' && A.buy(a)) { au.sfx.coin(); au.sfx.perfect(); buildCoins(); }
@@ -240,8 +302,47 @@
       hydrateArenas();
     });
   }
+  function bindArenaCarousel() {
+    var prev = $('#arPrev'), next = $('#arNext'), dots = $('#arDots'), view = $('#arView');
+    if (prev) {
+      prev.innerHTML = art.icon('back', 22);
+      prev.addEventListener('click', function () { stepArena(-1); });
+    }
+    if (next) {
+      next.innerHTML = art.icon('fwd', 22);
+      next.addEventListener('click', function () { stepArena(1); });
+    }
+    if (dots) {
+      dots.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('button') : null; if (!b) return;
+        var i = +b.dataset.i; if (i === arI) return;
+        showArenaCard(i, { dir: i > arI ? 1 : -1, sfx: true, music: true });
+      });
+    }
+    if (view) {
+      var sx = 0, sy = 0;
+      view.addEventListener('pointerdown', function (e) { sx = e.clientX; sy = e.clientY; });
+      view.addEventListener('pointerup', function (e) {
+        var dx = e.clientX - sx, dy = e.clientY - sy;
+        if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+          arSwipe = Date.now();
+          stepArena(dx < 0 ? 1 : -1);
+        }
+      });
+    }
+    document.addEventListener('keydown', function (e) {
+      var pg = $('#arenas'); if (!pg || pg.hidden) return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); stepArena(-1); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); stepArena(1); }
+    });
+  }
   function openArenas() {
-    loadScreen($('#arGrid'), 'screens/arenas.html').then(function () { hydrateArenas(); pageOpen('arenas'); }, function () { hydrateArenas(); pageOpen('arenas'); });
+    var A = SD.arenas, cur = A.current(), list = A.list, i;
+    arI = 0;
+    for (i = 0; i < list.length; i++) if (list[i].id === cur.id) arI = i;
+    hydrateArenas();
+    pageOpen('arenas');
+    if (list[arI]) playArenaTune(list[arI].id);
   }
   function previewArena(id) {
     var A = SD.arenas, a = A.byId(id); if (!a) return;
@@ -250,6 +351,7 @@
     $('#pads').innerHTML = ''; arena.hidden = false;
     if (A.state(a) === 'own') A.pin(a.id);
     A.enter(arena, a.id);
+    playArenaTune(a.id);
     var old = arena.querySelector('.ar-close'); if (old) old.remove();
     var b = document.createElement('button'); b.type = 'button'; b.className = 'icon-btn pg-back ar-close'; b.setAttribute('aria-label', 'Close preview'); b.innerHTML = art.icon('back', 24);
     b.addEventListener('click', function () {
@@ -270,6 +372,22 @@
   }
 
   function gamesN() { var n = st.get('games') | 0; return n === 3 || n === 8 ? n : 5; }
+  function askGames(done) {
+    var el = $('#pick');
+    if (!el) { if (done) done(gamesN()); return; }
+    el.hidden = false;
+    el.innerHTML = '<div class="pk-card g-ask"><h2>HOW MANY GAMES?</h2><p class="on-note">Best of 3, 5 or 8</p><div class="games-pick" id="askGamesPick"></div><button class="gel" type="button" id="askGamesGo"><span>PLAY</span></button><button class="gel alt" type="button" id="askGamesNo"><span>BACK</span></button></div>';
+    paintGamesPick($('#askGamesPick'));
+    $('#askGamesGo').addEventListener('click', function () {
+      el.hidden = true; el.innerHTML = '';
+      au.sfx.select();
+      if (done) done(gamesN());
+    });
+    $('#askGamesNo').addEventListener('click', function () {
+      el.hidden = true; el.innerHTML = '';
+      au.sfx.tap();
+    });
+  }
   function paintGamesPick(root, onPick) {
     if (!root) return;
     var cur = gamesN();
@@ -308,7 +426,10 @@
       b.addEventListener('click', function () {
         au.sfx.select();
         var id = b.dataset.mode;
-        if (id === 'quick') { if (CG && SD.sim) SD.sim.play(); else if (SD.party) SD.party.quick(); }
+        if (id === 'quick') {
+          if (CG && SD.sim) askGames(function () { SD.sim.play(); });
+          else if (SD.party) SD.party.quick();
+        }
         else if (id === 'room') { if (SD.party) SD.party.menu(); }
         else openOffline();
       });
@@ -468,9 +589,61 @@
     if (!$('#offline').hidden) renderOffline();
   }
 
-  var INFO_PANES = { about: 'infoAbout', terms: 'infoTerms', help: 'infoHelp', feed: 'infoFeed' };
+  var INFO_PANES = { about: 'infoAbout', terms: 'infoTerms', help: 'infoHelp', feed: 'infoFeed', hist: 'infoHist' };
   var FB_MOOD = ['', 'MEH', 'OK', 'FINE', 'YAY', 'LOVE IT'];
   var fbStars = 0;
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+  function whenLog(ts) {
+    var n = Number(ts);
+    var d = new Date(n);
+    if (!n || isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+  var logTab = 'm';
+  function paintLogPage() {
+    var L = SD.ledger, sum = $('#logSum'), list = $('#logList');
+    if (!L || !list) return;
+    var s = L.stats(), coins = st.get('coins') | 0, inf = pr.info();
+    Array.prototype.forEach.call(document.querySelectorAll('#logTabs .pw-tab'), function (b) {
+      b.classList.toggle('on', b.dataset.tab === logTab);
+    });
+    function empty(msg) { return '<p class="log-empty">' + msg + '</p>'; }
+    if (logTab === 'c') {
+      if (sum) { sum.className = 'log-sum one'; sum.innerHTML = '<span><b>' + coins + '</b><small>COINS NOW</small></span>'; }
+      var coinsLog = L.coins();
+      list.innerHTML = coinsLog.length ? coinsLog.map(function (r) {
+        var n = r.n | 0, sign = n > 0 ? '+' : '';
+        var title = n < 0 && r.why && r.why !== 'PLAY' ? ('LOST · ' + esc(r.why) + (r.name ? ' ' + esc(r.name) : '')) : ((n >= 0 ? 'GOT' : 'LOST') + (r.opp ? ' vs ' + esc(r.opp) : ''));
+        return '<div class="log-row ' + (n >= 0 ? 'win' : 'lose') + '">' +
+          '<div class="log-main"><b>' + title + '</b><small>' + whenLog(r.t) + '</small></div>' +
+          '<div class="log-coin ' + (n >= 0 ? 'plus' : 'minus') + '">' + sign + n + '<small>' + (r.bal | 0) + ' LEFT</small></div></div>';
+      }).join('') : empty('NO COIN MOVES YET');
+      return;
+    }
+    if (logTab === 'p') {
+      if (sum) { sum.className = 'log-sum'; sum.innerHTML = '<span><b>' + (inf.xp | 0) + '</b><small>POINTS NOW</small></span><span><b>' + (inf.need | 0) + '</b><small>NEED FOR LV ' + ((inf.level | 0) + 1) + '</small></span>'; }
+      var ptsLog = L.points();
+      list.innerHTML = ptsLog.length ? ptsLog.map(function (r) {
+        var n = r.n | 0, sign = n > 0 ? '+' : '';
+        return '<div class="log-row ' + (n >= 0 ? 'win' : 'lose') + '">' +
+          '<div class="log-main"><b>' + (n >= 0 ? 'WIN' : 'LOSS') + (r.opp ? ' vs ' + esc(r.opp) : '') + '</b><small>LV ' + (r.lvl | 0) + ' · ' + whenLog(r.t) + '</small></div>' +
+          '<div class="log-coin ' + (n >= 0 ? 'plus' : 'minus') + '">' + sign + n + '<small>' + (r.xp | 0) + ' PTS</small></div></div>';
+      }).join('') : empty('NO POINT MOVES YET');
+      return;
+    }
+    if (sum) { sum.className = 'log-sum'; sum.innerHTML = '<span><b>' + s.wins + '</b><small>WINS</small></span><span><b>' + s.losses + '</b><small>LOSSES</small></span>'; }
+    var matches = L.matches();
+    list.innerHTML = matches.length ? matches.map(function (r) {
+      return '<div class="log-row ' + (r.w ? 'win' : 'lose') + '">' +
+        '<div class="log-main"><b>' + (r.w ? 'WIN' : 'LOSS') + ' vs ' + esc(r.opp || 'RIVAL') + '</b></div></div>';
+    }).join('') : empty('NO MATCHES YET');
+  }
+  function bindLog() {
+    var tabs = $('#logTabs');
+    if (tabs) Array.prototype.forEach.call(tabs.querySelectorAll('.pw-tab'), function (b) {
+      b.addEventListener('click', function () { au.sfx.tap(); logTab = b.dataset.tab || 'm'; paintLogPage(); });
+    });
+  }
   function showInfoTab(id) {
     if (!INFO_PANES[id]) id = 'about';
     Array.prototype.forEach.call(document.querySelectorAll('#infoTabs .pw-tab'), function (b) {
@@ -482,6 +655,7 @@
       var n = document.getElementById(INFO_PANES[k]);
       if (n) n.hidden = k !== id;
     });
+    if (id === 'hist') paintLogPage();
   }
   function starBtns(size) {
     return [1, 2, 3, 4, 5].map(function (n) {
@@ -519,12 +693,15 @@
     n = n | 0;
     if (n < 1 || n > 5) { if (done) done(false); return; }
     fbStars = n;
-    if (CG) { st.set('fbLast', n); if (done) done(true); return; }
-    if (!SD.net || !SD.net.sendFeedback) { if (done) done(false); return; }
-    SD.net.sendFeedback('', n).then(function () { if (done) done(true); }, function () { if (done) done(false); });
+    st.set('fbLast', n);
+    if (CG) { if (done) done(true); return; }
+    if (!SD.net || !SD.net.sendFeedback) { if (done) done(true); return; }
+    SD.net.sendFeedback('', n).then(function () { if (done) done(true); }, function () { if (done) done(true); });
   }
+  function hasRated() { return (st.get('fbLast') | 0) >= 1; }
   function mountRate(root) {
     if (!root) return;
+    if (hasRated()) { root.hidden = true; root.innerHTML = ''; return; }
     var picked = 0, busy = false;
     root.hidden = false;
     root.innerHTML = '<p class="fb-rate-h">HOW HAPPY?</p><div class="fb-stars" role="radiogroup">' + starBtns() + '</div><p class="fb-mood">TAP A STAR</p><button type="button" class="gel alt fb-write"><span>WRITE MORE</span></button>';
@@ -560,7 +737,7 @@
     showInfoTab('about');
     var err = $('#fbErr'); if (err) { err.textContent = ''; err.classList.remove('ok'); }
     pageOpen('info');
-    if (SD.ads && SD.ads.showMoreBanner) SD.ads.showMoreBanner();
+    try { if (SD.ads && SD.ads.showMoreBanner) SD.ads.showMoreBanner(); } catch (e) {}
   }
   SD.feedback = { mount: mountRate, openWrite: openFeedbackPage };
   function bindInfo() {
@@ -624,7 +801,7 @@
     var wd = $('#wardrobe');
     if (wd && !wd.hidden && wdSlot === 0) { paintSave(); var s = $('#wdStats'); if (s) s.innerHTML = playerStatsHtml(true, true); }
   }
-  SD.main = { refresh: refresh, gamesN: gamesN };
+  SD.main = { refresh: refresh, gamesN: gamesN, askGames: askGames };
 
   function init() {
     SD.fx.init();
@@ -634,6 +811,7 @@
       var b = $(s); if (b) b.innerHTML = art.icon('back', 24);
     });
     bindInfo();
+    bindLog();
     $('#wdBack').addEventListener('click', closeWardrobe);
     paintGamesPick($('#ofGames'));
     $('#tabLook').addEventListener('click', function () { au.sfx.tap(); showWdTab('look'); });
@@ -641,7 +819,8 @@
     $('#tabCtrl').addEventListener('click', function () { au.sfx.tap(); showWdTab('ctrl'); if (wdSlot === 0) buildSettings(); });
     $('#ofGo').addEventListener('click', function () { au.sfx.select(); pageClose('offline'); SD.engine.start('pay', { total: gamesN() }); });
     $('#ofBack').addEventListener('click', function () { au.sfx.tap(); pageClose('offline'); });
-    $('#arBack').addEventListener('click', function () { au.sfx.tap(); pageClose('arenas'); });
+    bindArenaCarousel();
+    $('#arBack').addEventListener('click', function () { au.sfx.tap(); restoreMenuTune(); pageClose('arenas'); });
     $('#pwBack').addEventListener('click', function () { au.sfx.tap(); pageClose('powers'); buildCoins(); });
     var sign = $('#wdSignIn');
     if (sign) sign.addEventListener('click', function () {
@@ -668,22 +847,46 @@
       setTimeout(once, 2200);
     }
     function afterPaint() {
-      function movie() { if (SD.intro) { au.music.start('menu'); SD.intro.play(function () { au.sfx.select(); }); } }
-      if (au.running()) { movie(); return; }
-      if (!(au.isOn('music') || au.isOn('sfx'))) return;
-      var ov = $('#tapStart'); ov.hidden = false;
-      var go = function () {
-        ov.hidden = true; au.unlock();
-        movie();
-        ov.removeEventListener('pointerdown', go); window.removeEventListener('keydown', go);
-      };
-      ov.addEventListener('pointerdown', go); window.addEventListener('keydown', go);
+      var first = !(SD.intro && SD.intro.seen && SD.intro.seen());
+      var ov = $('#tapStart'), home = $('#home'), note = ov.querySelector('p');
+      if (note) note.textContent = (au.isOn('music') ? 'MUSIC ON' : 'MUSIC OFF') + '  ·  ' + (au.isOn('sfx') ? 'SOUND ON' : 'SOUND OFF');
+      try { au.music.stop(); } catch (e) {}
+      var hidHome = false;
+      if (home && !home.hidden) { home.hidden = true; hidHome = true; }
+      ov.hidden = false;
+      var started = false;
+      function go() {
+        if (started) return;
+        started = true;
+        ov.hidden = true;
+        au.unlock();
+        if (hidHome && home) home.hidden = false;
+        try { au.music.start('menu'); } catch (e) {}
+        if (au.isOn('sfx')) { try { au.sfx.select(); } catch (e) {} }
+        ov.removeEventListener('pointerdown', go);
+        window.removeEventListener('keydown', go);
+        if (first && SD.intro) SD.intro.play(function () { if (au.isOn('sfx')) au.sfx.select(); });
+      }
+      ov.addEventListener('pointerdown', go);
+      window.addEventListener('keydown', go);
     }
     hideBoot(afterPaint);
     SD.engine.home();
-    if (SD.ads && SD.ads.init) SD.ads.init();
-    if (CG && SD.cg) SD.cg.init().then(function () { refresh(); if (SD.ads) SD.ads.ready(); if (SD.ads && SD.ads.showHomeBanner) SD.ads.showHomeBanner(); });
-    else if (SD.ads && SD.ads.showHomeBanner) SD.ads.showHomeBanner();
+    try { if (SD.ads && SD.ads.init) SD.ads.init(); } catch (e) {}
+    if (CG && SD.cg && SD.cg.init) {
+      var bootCg = SD.cg.init();
+      if (bootCg && bootCg.then) bootCg.then(function () {
+        try {
+          refresh();
+          if (SD.cg && SD.cg.ready && SD.ads) {
+            SD.ads.ready();
+            if (SD.ads.showHomeBanner) SD.ads.showHomeBanner();
+          }
+        } catch (e) {}
+      }, function () { try { refresh(); } catch (e) {} });
+    } else {
+      try { if (SD.ads && SD.ads.showHomeBanner) SD.ads.showHomeBanner(); } catch (e) {}
+    }
     if (!CG && SD.net) SD.net.boot().then(function (loaded) { if (loaded) { refresh(); au.music.refresh(); } });
     if (!CG && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
       navigator.serviceWorker.register('sw.js').catch(function () {});

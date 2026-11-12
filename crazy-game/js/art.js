@@ -264,6 +264,7 @@ window.SD = window.SD || {};
     close: '<path d="M14 14L50 50M50 14L14 50" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
     slash: '<path d="M10 54L54 10" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
     back: '<path d="M38 10L14 32L38 54" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 32H52" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
+    fwd: '<path d="M26 10L50 32L26 54" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M46 32H12" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
     zap: '<path d="M38 5L13 37H28L23 60L51 25H35Z" fill="#9b6bff"' + stroke(4) + '/><path d="M30 16L26 28" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity=".85"/>',
     cup: '<path d="M18 8H46V26Q46 40 32 42Q18 40 18 26Z" fill="#ff7a32"' + stroke(4) + '/><path d="M18 14H8Q8 28 20 30M46 14H56Q56 28 44 30" fill="none"' + stroke(4) + '/><path d="M32 42V50M20 58H44L42 50H22Z" fill="#ff7a32"' + stroke(4) + '/><ellipse cx="28" cy="16" rx="5" ry="7" fill="#fff" opacity=".55"/>',
     spark: '<path d="M32 5L40 24L60 26L45 39L49 59L32 48L15 59L19 39L4 26L24 24Z" fill="#ff4d6d"' + stroke(4) + '/><path d="M32 16L35 26" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity=".85"/>',

@@ -2,18 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-262548865860815"
+     crossorigin="anonymous"></script>
+<meta name="google-adsense-account" content="ca-pub-262548865860815">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Silly Duel</title>
 <meta name="description" content="Quick silly games to decide who pays the bill. A 2 player duel with skins and levels.">
 <meta name="theme-color" content="#ffd9ec">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://www.gstatic.com https://www.googleapis.com https://apis.google.com https://unpkg.com https://pagead2.googlesyndication.com https://www.googletagservices.com https://tpc.googlesyndication.com https://www.google.com https://googleads.g.doubleclick.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.google.com https://*.firebaseio.com wss://*.firebaseio.com wss://*.googleapis.com https://*.firebaseapp.com https://unpkg.com https://*.peerjs.com wss://*.peerjs.com wss://silly-duel.onrender.com https://silly-duel.onrender.com https://*.googlesyndication.com https://*.doubleclick.net https://*.googleadservices.com; frame-src https://accounts.google.com https://silly-duel.firebaseapp.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://pagead2.googlesyndication.com https://www.google.com https://*.doubleclick.net;">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icon-192.png">
-<link rel="stylesheet" href="css/style.css?v=82">
+<link rel="stylesheet" href="css/style.css?v=91">
 <link rel="stylesheet" href="css/games2.css?v=63">
-<link rel="stylesheet" href="css/games3.css?v=63">
-  <link rel="stylesheet" href="css/arenas.css">
+<link rel="stylesheet" href="css/games3.css?v=64">
+  <link rel="stylesheet" href="css/arenas.css?v=4">
   <link rel="stylesheet" href="css/dock.css?v=63">
   <link rel="stylesheet" href="css/skins.css">
   <link rel="stylesheet" href="css/party.css">
@@ -118,7 +120,14 @@
         <h2>ARENAS</h2>
       </div>
       <div class="pw-coins" id="arCoins"></div>
-      <div class="ar-grid" id="arGrid"></div>
+      <div class="ar-stage" id="arStage">
+        <button class="icon-btn ar-nav" id="arPrev" type="button" aria-label="Previous arena"></button>
+        <div class="ar-view" id="arView">
+          <div class="ar-grid" id="arGrid"></div>
+        </div>
+        <button class="icon-btn ar-nav" id="arNext" type="button" aria-label="Next arena"></button>
+      </div>
+      <div class="ar-dots" id="arDots" role="tablist" aria-label="Arenas"></div>
     </div>
   </section>
 
@@ -133,6 +142,7 @@
         <button class="pw-tab" type="button" data-tab="terms">TERMS</button>
         <button class="pw-tab" type="button" data-tab="help">HELP</button>
         <button class="pw-tab" type="button" data-tab="feed">FEEDBACK</button>
+        <button class="pw-tab" type="button" data-tab="hist">HISTORY</button>
       </div>
       <div class="info-pane" id="infoAbout">
         <div class="info-copy">
@@ -169,6 +179,16 @@
         <textarea id="fbMsg" class="on-in info-msg" maxlength="400" rows="4" placeholder="TYPE HERE"></textarea>
         <p class="on-err" id="fbErr"></p>
         <button class="gel" id="fbSend" type="button"><span>SEND</span></button>
+      </div>
+      <div class="info-pane" id="infoHist" hidden>
+        <div class="pw-tabs log-tabs" id="logTabs" role="tablist">
+          <button class="pw-tab on" type="button" data-tab="m">MATCHES</button>
+          <button class="pw-tab" type="button" data-tab="c">COINS</button>
+          <button class="pw-tab" type="button" data-tab="p">POINTS</button>
+        </div>
+        <div class="log-sum" id="logSum"></div>
+        <p class="log-note">SAVED TO THIS PHONE AND FIREBASE. GUESTS KEEP IT TOO.</p>
+        <div class="log-list" id="logList"></div>
       </div>
     </div>
   </section>
@@ -260,21 +280,22 @@
 </div>
 
 <script src="js/build.js"></script>
-<script src="js/storage.js?v=63"></script>
-<script src="js/fit.js?v=53"></script>
+<script src="js/storage.js?v=64"></script>
+<script src="js/ledger.js?v=1"></script>
+<script src="js/fit.js?v=54"></script>
 <script src="js/firebase-config.js"></script>
-<script src="js/art.js?v=65"></script>
-<script src="js/progress.js"></script>
-<script src="js/powers.js?v=62"></script>
-<script src="js/audio.js"></script>
+<script src="js/art.js?v=66"></script>
+<script src="js/progress.js?v=2"></script>
+<script src="js/powers.js?v=63"></script>
+<script src="js/audio.js?v=2"></script>
 <script src="js/fx.js"></script>
-<script src="js/engine.js?v=65"></script>
+<script src="js/engine.js?v=71"></script>
 <script src="js/games/freeze.js"></script>
 <script src="js/games/dodge.js"></script>
 <script src="js/games/beat.js"></script>
 <script src="js/games/pinata.js"></script>
 <script src="js/games/bomb.js"></script>
-<script src="js/games/flap.js"></script>
+<script src="js/games/flap.js?v=2"></script>
 <script src="js/games/hop.js"></script>
 <script src="js/games/stack.js"></script>
 <script src="js/games/balance.js"></script>
@@ -284,16 +305,22 @@
 <script src="js/games/skip.js"></script>
 <script src="js/games/echo.js"></script>
 <script src="js/games/lander.js"></script>
+<script src="js/games/piedodge.js?v=2"></script>
+<script src="js/games/memory.js?v=2"></script>
+<script src="js/games/fillcard.js?v=2"></script>
+<script src="js/games/oddone.js?v=2"></script>
+<script src="js/games/whack.js?v=2"></script>
+<script src="js/games/quiettwin.js?v=2"></script>
 <script src="js/games/boss.js"></script>
-<script src="js/pools.js"></script>
+<script src="js/pools.js?v=3"></script>
   <script src="js/arenas.js"></script>
 <script src="js/net.js?v=65"></script>
 <script src="js/lobby.js?v=61"></script>
 <script src="js/server-config.js"></script>
-<script src="js/party.js?v=65"></script>
-<script src="js/intro.js?v=71"></script>
+<script src="js/party.js?v=66"></script>
+<script src="js/intro.js?v=72"></script>
 <script src="js/ads-config.js"></script>
-<script src="js/ads.js?v=3"></script>
-<script src="js/main.js?v=73"></script>
+<script src="js/ads.js?v=5"></script>
+<script src="js/main.js?v=78"></script>
 </body>
 </html>

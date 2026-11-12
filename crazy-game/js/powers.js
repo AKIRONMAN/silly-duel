@@ -66,7 +66,17 @@
   }
   function buy(id) {
     if (canBuy(id)) return false;
-    SD.progress.addCoins(-price(id)); setOwn(id, own(id) + 1); return true;
+    var cost = price(id);
+    SD.progress.addCoins(-cost); setOwn(id, own(id) + 1);
+    try {
+      if (SD.ledger) SD.ledger.logBuy({
+        kind: 'power',
+        name: (BY[id] && BY[id].name) || id,
+        cost: cost,
+        bal: st.get('coins') | 0
+      });
+    } catch (e) {}
+    return true;
   }
   /* a computer player (bot or simulated online player) picks up to 2 like a person would */
   function botPick(level) {

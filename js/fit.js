@@ -2,7 +2,7 @@
    Desktop keeps that same column and centers it. Live games still fill the window. */
 (function () {
   'use strict';
-  var IDS = ['home', 'online', 'party', 'wardrobe', 'settings', 'simSearch', 'offline', 'powers', 'arenas'], DW = 390, DH = 780;
+  var IDS = ['home', 'online', 'party', 'wardrobe', 'settings', 'simSearch', 'offline', 'powers', 'arenas', 'info'], DW = 390, DH = 780;
   function fit() {
     var w = window.innerWidth, h = window.innerHeight;
     var desk = w >= 900 && w / h >= 1.05;

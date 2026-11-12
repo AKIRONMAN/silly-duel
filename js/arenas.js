@@ -22,7 +22,11 @@
   function state(a) { return owned(a) ? 'own' : a.lvl > lvl() ? 'shadow' : 'buy'; }
   function buy(a) {
     if (state(a) !== 'buy' || (SD.store.get('coins') | 0) < a.cost) return false;
-    SD.progress.addCoins(-a.cost); var r = (SD.store.get('rooms') || []).slice(); r.push(a.id); SD.store.set('rooms', r); pin(a.id); return true;
+    SD.progress.addCoins(-a.cost); var r = (SD.store.get('rooms') || []).slice(); r.push(a.id); SD.store.set('rooms', r); pin(a.id);
+    try {
+      if (SD.ledger) SD.ledger.logBuy({ kind: 'arena', name: a.name || a.id, cost: a.cost, bal: SD.store.get('coins') | 0 });
+    } catch (e) {}
+    return true;
   }
   function newest(L) { var r = LIST[0]; LIST.forEach(function (a) { if (a.lvl <= L && owned(a)) r = a; }); return r; }
   function byId(id) { for (var i = 0; i < LIST.length; i++) if (LIST[i].id === id) return LIST[i]; return null; }
@@ -43,7 +47,7 @@
     sc.innerHTML = a.scene;
     arenaEl.appendChild(fxEl);
     var h = '', i;
-    for (i = 0; i < 16; i++) {
+    for (i = 0; i < 8; i++) {
       var x = (i * 37 + 11) % 100, d = 5 + (i * 7) % 6, dl = -((i * 13) % 10), sz = 14 + (i * 5) % 14;
       h += '<i class="mv-' + a.mv + '" style="left:' + x + '%;font-size:' + sz + 'px;color:' + a.c + ';animation-duration:' + d + 's;animation-delay:' + dl + 's">' + a.g + '</i>';
     }

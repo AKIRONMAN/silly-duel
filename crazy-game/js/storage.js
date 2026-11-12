@@ -4,7 +4,7 @@ window.SD = window.SD || {};
 (function () {
   'use strict';
   var KEY = 'sillyduel.v1';
-  var EXTRA = ['sd_arena', 'sd_seen'];         // small extra keys kept outside the main save
+  var EXTRA = ['sd_arena', 'sd_seen', 'sd_ledger'];         // small extra keys kept outside the main save
   var UID_KEY = 'sd_uid';                       // device id used to fetch this player's Firestore save
   var defaults = {
     pies: [0, 0], plays: 0, music: true, sfx: true, voice: true,
@@ -70,8 +70,17 @@ window.SD = window.SD || {};
     name: function (i) { return data.names[i]; },
     save: save,
     onChange: function (fn) { onChange = fn; },
-    extraGet: function (k) { try { return persist.getItem(k); } catch (e) { return null; } },
-    extraSet: function (k, v) { try { if (v == null) persist.removeItem(k); else persist.setItem(k, String(v)); } catch (e) {} },
+    extraGet: function (k) {
+      try { var v = persist.getItem(k); if (v != null) return v; } catch (e) {}
+      try { return localStorage.getItem(k); } catch (e) { return null; }
+    },
+    extraSet: function (k, v) {
+      function put(store) {
+        try { if (v == null) store.removeItem(k); else store.setItem(k, String(v)); } catch (e) {}
+      }
+      put(persist);
+      put(localStorage);
+    },
     attach: function (backend) {
       if (!backend || typeof backend.getItem !== 'function') return false;
       persist = backend;
@@ -113,7 +122,10 @@ window.SD = window.SD || {};
     reset: function () {
       var keep = {}; ['music', 'sfx', 'voice', 'keys', 'ctrlV', 'ctrlH', 'skinSwap'].forEach(function (k) { keep[k] = data[k]; });
       data = keep; normalize(); write();
-      EXTRA.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+      EXTRA.forEach(function (k) {
+        if (k === 'sd_ledger') return;
+        try { localStorage.removeItem(k); } catch (e) {}
+      });
     },
     /* local save looks like it was edited (level/coins/unlocks) before any cloud copy exists */
     boosted: function () {
@@ -128,7 +140,7 @@ window.SD = window.SD || {};
       return {
         name: String((data.names && data.names[0]) || 'PLAYER').slice(0, 14),
         level: Math.max(1, Math.min(200, data.level | 0)),
-        xp: Math.max(0, Math.min(10, data.xp | 0)),
+        xp: Math.max(0, Math.min(3000, data.xp | 0)),
         coins: Math.max(0, Math.min(999999, data.coins | 0)),
         pies0: data.pies[0] | 0, pies1: data.pies[1] | 0,
         wins: data.wins | 0, losses: data.losses | 0,

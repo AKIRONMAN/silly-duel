@@ -1,35 +1,52 @@
-/* CrazyGames SDK: Data module for saves, silent user name, gameplay events. No outside account storage. */
+/* CrazyGames SDK: Data module for saves, silent user name, gameplay events. No outside account storage.
+   SDK / ad failures never block the game. */
 window.SD = window.SD || {};
 (function () {
   'use strict';
   var st = SD.store, C = SD.cg = { user: null, ready: false, available: false }, playing = false;
 
-  function sdk() { return window.CrazyGames && window.CrazyGames.SDK; }
-  function safe(fn) { try { var r = fn(); if (r && r.catch) r.catch(function () {}); return r; } catch (e) {} }
+  function sdk() { try { return window.CrazyGames && window.CrazyGames.SDK; } catch (e) { return null; } }
+  function settle(p) {
+    try {
+      if (p && typeof p.then === 'function') return p.then(function (v) { return v; }, function () {});
+    } catch (e) {}
+    return p;
+  }
+  function safe(fn) { try { return settle(fn()); } catch (e) {} }
 
   C.play = function () {
-    var s = sdk(); if (playing) return; playing = true;
-    if (C.ready && s && s.game) safe(function () { return s.game.gameplayStart(); });
+    try {
+      if (playing) return; playing = true;
+      var s = sdk();
+      if (C.ready && s && s.game) safe(function () { return s.game.gameplayStart(); });
+    } catch (e) { playing = true; }
   };
   C.stop = function () {
-    var s = sdk(); if (!playing) return; playing = false;
-    if (C.ready && s && s.game) safe(function () { return s.game.gameplayStop(); });
+    try {
+      if (!playing) return; playing = false;
+      var s = sdk();
+      if (C.ready && s && s.game) safe(function () { return s.game.gameplayStop(); });
+    } catch (e) { playing = false; }
   };
   C.happy = function () {
-    var s = sdk();
-    if (C.ready && s && s.game && s.game.happytime) safe(function () { return s.game.happytime(); });
+    try {
+      var s = sdk();
+      if (C.ready && s && s.game && s.game.happytime) safe(function () { return s.game.happytime(); });
+    } catch (e) {}
   };
 
   function apply(u) {
-    C.user = u && u.username ? u : null;
-    if (C.user) {
-      var n = st.cleanName(C.user.username);
-      if (n.length >= 3 && st.get('acct') !== 'cg') {
-        st.setName(0, n);
-        st.set('acct', 'cg');
+    try {
+      C.user = u && u.username ? u : null;
+      if (C.user) {
+        var n = st.cleanName(C.user.username);
+        if (n.length >= 3 && st.get('acct') !== 'cg') {
+          st.setName(0, n);
+          st.set('acct', 'cg');
+        }
       }
-    }
-    if (SD.main) SD.main.refresh();
+      if (SD.main) SD.main.refresh();
+    } catch (e) {}
   }
 
   function waitSdk() {
@@ -42,25 +59,43 @@ window.SD = window.SD || {};
     });
   }
 
+  function timedInit(s) {
+    return new Promise(function (res) {
+      var done = false;
+      function fin(ok) { if (done) return; done = true; res(!!ok); }
+      setTimeout(function () { fin(false); }, 5000);
+      try {
+        Promise.resolve(s.init()).then(function () { fin(true); }, function () { fin(false); });
+      } catch (e) { fin(false); }
+    });
+  }
+
   C.init = function () {
     return waitSdk().then(function () {
       var s = sdk();
-      if (!s) return;
+      if (!s || typeof s.init !== 'function') return;
       var stopped = false;
       function stopLoad() {
         if (stopped) return; stopped = true;
+        if (!C.ready) return;
         var s2 = sdk();
         if (s2 && s2.game && s2.game.loadingStop) safe(function () { return s2.game.loadingStop(); });
       }
       setTimeout(stopLoad, 8000);
-      return Promise.resolve().then(function () { return s.init(); }).then(function () {
+      return timedInit(s).then(function (ok) {
+        if (!ok || !sdk()) return;
         C.ready = true;
         if (s.game && s.game.loadingStart) safe(function () { return s.game.loadingStart(); });
-        if (s.data && SD.store && SD.store.attach) SD.store.attach(s.data);
+        if (s.data && SD.store && SD.store.attach) {
+          try { SD.store.attach(s.data); } catch (e) {}
+          try { if (SD.main) SD.main.refresh(); } catch (e) {}
+        }
         if (SD.ads) {
-          SD.ads.init();
-          SD.ads.ready();
-          if (SD.ads.showHomeBanner) SD.ads.showHomeBanner();
+          try {
+            SD.ads.init();
+            SD.ads.ready();
+            if (SD.ads.showHomeBanner) SD.ads.showHomeBanner();
+          } catch (e) {}
         }
         try {
           C.available = !!(s.user && s.user.isUserAccountAvailable);
@@ -69,7 +104,7 @@ window.SD = window.SD || {};
             return Promise.resolve(s.user.getUser()).then(apply, function () { apply(null); });
           }
         } catch (e) {}
-      }).catch(function () {}).then(stopLoad);
-    });
+      }).then(stopLoad, stopLoad);
+    }).then(function () { return C; }, function () { return C; });
   };
 })();

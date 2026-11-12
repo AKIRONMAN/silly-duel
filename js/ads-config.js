@@ -2,7 +2,7 @@
    Leave client blank to keep ads off until AdSense is approved. CrazyGames ignores this file. */
 window.SD = window.SD || {};
 SD.ADS_CFG = {
-  client: '',            /* e.g. 'ca-pub-1234567890123456' */
+  client: 'ca-pub-262548865860815',
   bannerHome: '',        /* 320 x 50 used on home, about, offline play, match, room, top 100 */
   freq: '90s'
 };

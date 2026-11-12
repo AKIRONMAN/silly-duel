@@ -6,20 +6,20 @@
   SD.art.addIcons({
     lily: '<ellipse cx="32" cy="44" rx="26" ry="11" fill="#4fd18b"' + st + '/><circle cx="32" cy="24" r="14" fill="#a8e86b"' + st + '/><circle cx="26" cy="20" r="4.5" fill="#fff"' + st.replace('4', '2.5') + '/><circle cx="38" cy="20" r="4.5" fill="#fff"' + st.replace('4', '2.5') + '/><circle cx="26" cy="20" r="1.8" fill="' + INK + '"/><circle cx="38" cy="20" r="1.8" fill="' + INK + '"/>'
   });
-  var DUR = 16000, FULL = 1.0;
+  var DUR = 16000, FULL = 1.0, NPAD = 40;
   SD.games.push({
     id: 'hop', title: 'LILY HOP', tip: 'HOLD TO CHARGE. LET GO TO JUMP', icon: 'lily',
     start: function (A) {
       var P = A.players, G = {}, finished = false, t = 0, dist = [], k;
-      for (k = 0; k < 14; k++) dist.push((0.26 + A.rand() * 0.2) * (1 + 0.25 * A.hard));               // distance to the next pad, in screen widths
+      for (k = 0; k < NPAD; k++) dist.push((0.26 + A.rand() * 0.2) * (1 + 0.25 * A.hard));               // distance to the next pad, in screen widths
       P.forEach(function (i) {
         var stage = A.stage(i);
         stage.innerHTML = '<div class="hp"><b class="hp-n">0</b><div class="hp-box"><div class="hp-world"></div><div class="hp-bar"><i></i></div></div></div>';
         var box = stage.querySelector('.hp-box'), W = box.clientWidth, H = box.clientHeight, world = box.querySelector('.hp-world'), fs = Math.max(30, Math.min(W * 0.17, H * 0.2));
         var wide = A.power(i, 'pads') ? 1.4 : 1, cx = [0], pads = [];
-        for (k = 0; k < 14; k++) cx.push(cx[k] + dist[k] * W);
-        for (k = 0; k <= 14; k++) {
-          var hw = Math.max(0.04, 0.105 - k * 0.0045) * (1 - 0.35 * A.hard) * W * wide, el = document.createElement('div'); el.className = 'hp-pad';
+        for (k = 0; k < NPAD; k++) cx.push(cx[k] + dist[k] * W);
+        for (k = 0; k <= NPAD; k++) {
+          var hw = Math.max(0.045, 0.105 - Math.min(k, 14) * 0.0045) * (1 - 0.35 * A.hard) * W * wide, el = document.createElement('div'); el.className = 'hp-pad';
           el.style.left = (cx[k] - hw) + 'px'; el.style.width = (hw * 2) + 'px'; world.appendChild(el); pads.push(hw);
         }
         var mark = document.createElement('div'); mark.className = 'hp-mark'; world.appendChild(mark);
@@ -44,7 +44,7 @@
       });
       function land(i) {
         var g = G[i], x = g.from + g.L, nk = g.k + 1;
-        if (Math.abs(x - g.cx[nk]) <= g.hw[nk] + g.fs * 0.1 && nk <= 14) {
+        if (nk < g.cx.length && Math.abs(x - g.cx[nk]) <= g.hw[nk] + g.fs * 0.1) {
           g.k = nk; g.fx = x; g.score++; g.lastAt = t; g.ph = 'idle';
           g.frog.parentNode.parentNode.parentNode.querySelector('.hp-n').textContent = g.score;
           A.face(i, 'cheer'); A.later(function () { A.face(i, 'idle'); }, 300); SD.audio.sfx.coin();
@@ -63,6 +63,7 @@
           if ((A.bots || []).indexOf(i) >= 0 && g.ph === 'idle') {                  // bot: charges for about the right time
             g.wait -= dt;
             if (g.wait <= 0) {
+              if (g.k + 1 >= g.cx.length) return;
               var need = ((g.cx[g.k + 1] - g.fx) / g.W - 0.08) / 0.52, c = Math.max(0.05, Math.min(1, need + (A.rand() - 0.5) * (1 - A.skill) * 0.4));
               g.wait = FULL * c + 0.55 + A.rand() * 0.3; A.press(i); A.later(function () { A.release(i); }, c * FULL * 1000);
             }

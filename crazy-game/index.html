@@ -7,15 +7,44 @@
 <meta name="description" content="Quick silly games to win the trophy. Best of 5 mini games, a 2 player duel with skins, power-ups and levels.">
 <meta name="theme-color" content="#ffd9ec">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=93">
 <link rel="stylesheet" href="css/games2.css">
 <link rel="stylesheet" href="css/games3.css">
-<link rel="stylesheet" href="css/arenas.css">
+<link rel="stylesheet" href="css/arenas.css?v=4">
 <link rel="stylesheet" href="css/dock.css">
 <link rel="stylesheet" href="css/skins.css">
 <link rel="stylesheet" href="css/intro.css">
+<style>
+#boot{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:linear-gradient(160deg,#ffe27a,#ff9ecf 55%,#c9b6ff);font-family:'Silkscreen','Courier New',ui-monospace,monospace;font-weight:700;color:#2a1650;text-align:center}
+#boot.out{opacity:0;pointer-events:none;transition:opacity .4s}
+.boot-logo{display:flex;flex-direction:column;line-height:.82;font-size:clamp(42px,12vw,64px);text-shadow:-3px -3px 0 #2a1650,3px -3px 0 #2a1650,-3px 3px 0 #2a1650,3px 3px 0 #2a1650,0 6px 0 #2a1650}
+.boot-logo b:first-child{color:#ff8cc3;transform:rotate(-4deg)}
+.boot-logo b:last-child{color:#ffd84d;transform:rotate(3deg)}
+.boot-duel{display:flex;align-items:center;justify-content:center;gap:6px;height:110px}
+.boot-face{width:96px;height:96px;animation:bootBob .7s ease-in-out infinite alternate}
+.boot-face.b{animation-delay:.2s}
+.boot-face svg{width:100%;height:100%;overflow:visible;display:block}
+.boot-trophy{width:72px;height:72px;filter:drop-shadow(0 0 12px #ffe27a);animation:bootGlow 1s ease-in-out infinite alternate}
+.boot-trophy svg{width:100%;height:100%;display:block;overflow:visible}
+.boot-txt{margin:0;font-size:14px;letter-spacing:.12em}
+.boot-bar{width:min(220px,70vw);height:10px;background:rgba(42,22,80,.2);border:3px solid #2a1650;border-radius:99px;overflow:hidden}
+.boot-bar i{display:block;height:100%;width:30%;background:#2a1650;border-radius:99px;animation:bootSlide 1s ease-in-out infinite}
+@keyframes bootBob{from{transform:translateY(0)}to{transform:translateY(-8px)}}
+@keyframes bootGlow{from{transform:scale(1);filter:drop-shadow(0 0 8px #ffe27a)}to{transform:scale(1.08);filter:drop-shadow(0 0 18px #ffd84d)}}
+@keyframes bootSlide{0%{transform:translateX(-100%)}100%{transform:translateX(330%)}}
+</style>
 </head>
 <body>
+<div id="boot" aria-hidden="true">
+  <div class="boot-logo"><b>SILLY</b><b>DUEL</b></div>
+  <div class="boot-duel">
+    <span class="boot-face a"><svg viewBox="0 0 120 120" aria-hidden="true"><rect x="2" y="30" width="26" height="52" rx="13" fill="#2fa6e8" stroke="#2a1650" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" transform="rotate(10 15 56)"/><rect x="92" y="30" width="26" height="52" rx="13" fill="#2fa6e8" stroke="#2a1650" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-10 105 56)"/><rect x="14" y="26" width="92" height="84" rx="30" fill="#6fcfff" stroke="#2a1650" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><rect x="38" y="66" width="44" height="36" rx="16" fill="#fff" opacity=".85"/><rect x="26" y="48" width="26" height="26" rx="10" fill="#2fa6e8" opacity=".35"/><ellipse cx="32" cy="78" rx="7" ry="5" fill="#b8e8ff" opacity=".55"/><ellipse cx="88" cy="78" rx="7" ry="5" fill="#b8e8ff" opacity=".55"/><circle cx="44" cy="62" r="10" fill="#fff" stroke="#2a1650" stroke-width="3"/><circle cx="76" cy="62" r="10" fill="#fff" stroke="#2a1650" stroke-width="3"/><circle cx="45" cy="64" r="3.8" fill="#2a1650"/><circle cx="75" cy="64" r="3.8" fill="#2a1650"/><path d="M33 46L52 52M87 46L68 52" fill="none" stroke="#2a1650" stroke-width="4" stroke-linecap="round"/><path d="M48 88Q54 80 60 86Q66 92 72 84" fill="none" stroke="#2a1650" stroke-width="4" stroke-linecap="round"/></svg></span>
+    <span class="boot-trophy"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M18 8H46V26Q46 40 32 42Q18 40 18 26Z" fill="#ffd23f" stroke="#2a1650" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 14H8Q8 28 20 30M46 14H56Q56 28 44 30" fill="none" stroke="#2a1650" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 42V50M20 58H44L42 50H22Z" fill="#ffd23f" stroke="#2a1650" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <span class="boot-face b"><svg viewBox="0 0 120 120" aria-hidden="true"><g transform="translate(30 34) rotate(-18)"><path d="M-16 14Q-18 -10 0 -24Q18 -10 16 14Z" fill="#ff8cc3" stroke="#2a1650" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M-8 10Q-9 -4 0 -13Q9 -4 8 10Z" fill="#ffc4de"/></g><g transform="translate(90 34) rotate(18)"><path d="M-16 14Q-18 -10 0 -24Q18 -10 16 14Z" fill="#ff8cc3" stroke="#2a1650" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M-8 10Q-9 -4 0 -13Q9 -4 8 10Z" fill="#ffc4de"/></g><rect x="14" y="26" width="92" height="84" rx="30" fill="#ff8cc3" stroke="#2a1650" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M52 34V44M60 32V44M68 34V44" fill="none" stroke="#e5559b" stroke-width="3.5" stroke-linecap="round"/><path d="M6 70H20M8 82L20 77M114 70H100M112 82L100 77" fill="none" stroke="#2a1650" stroke-width="3" stroke-linecap="round"/><ellipse cx="32" cy="78" rx="7" ry="5" fill="#ffb3d4" opacity=".55"/><ellipse cx="88" cy="78" rx="7" ry="5" fill="#ffb3d4" opacity=".55"/><circle cx="44" cy="62" r="10" fill="#fff" stroke="#2a1650" stroke-width="3"/><circle cx="76" cy="62" r="10" fill="#fff" stroke="#2a1650" stroke-width="3"/><circle cx="45" cy="64" r="3.8" fill="#2a1650"/><circle cx="75" cy="64" r="3.8" fill="#2a1650"/><path d="M33 46L52 52M87 46L68 52" fill="none" stroke="#2a1650" stroke-width="4" stroke-linecap="round"/><path d="M48 88Q54 80 60 86Q66 92 72 84" fill="none" stroke="#2a1650" stroke-width="4" stroke-linecap="round"/></svg></span>
+  </div>
+  <p class="boot-txt">LOADING</p>
+  <div class="boot-bar"><i></i></div>
+</div>
 <div id="app">
   <div class="bgfx" aria-hidden="true"></div>
 
@@ -36,9 +65,12 @@
         </div>
       </div>
     </div>
-    <div class="home-foot mode-row2 pair" id="modeRow2">
-      <button class="gel mode-pw" type="button" id="btnPowers"><span class="mode-ico" data-icon="zap" data-sz="26"></span><span>POWERS</span></button>
-      <button class="gel mode-pw" type="button" id="btnArena"><span class="mode-ico" data-icon="spark" data-sz="26"></span><span>ARENAS</span></button>
+    <div class="home-foot" id="modeRow2">
+      <div class="mode-row2">
+        <button class="gel mode-pw" type="button" id="btnPowers"><span class="mode-ico" data-icon="zap" data-sz="26"></span><span>POWERS</span></button>
+        <button class="gel mode-pw" type="button" id="btnArena"><span class="mode-ico" data-icon="spark" data-sz="26"></span><span>ARENAS</span></button>
+        <button class="gel mode-pw" type="button" id="btnLog"><span class="mode-ico" data-icon="clock" data-sz="26"></span><span>HISTORY</span></button>
+      </div>
     </div>
   </main>
 
@@ -83,7 +115,31 @@
         <h2>ARENAS</h2>
       </div>
       <div class="pw-coins" id="arCoins"></div>
-      <div class="ar-grid" id="arGrid"></div>
+      <div class="ar-stage" id="arStage">
+        <button class="icon-btn ar-nav" id="arPrev" type="button" aria-label="Previous arena"></button>
+        <div class="ar-view" id="arView">
+          <div class="ar-grid" id="arGrid"></div>
+        </div>
+        <button class="icon-btn ar-nav" id="arNext" type="button" aria-label="Next arena"></button>
+      </div>
+      <div class="ar-dots" id="arDots" role="tablist" aria-label="Arenas"></div>
+    </div>
+  </section>
+
+  <section id="ledger" class="screen" hidden aria-label="History">
+    <div class="wd-card pw-card-wrap">
+      <div class="page-head">
+        <button class="icon-btn pg-back" id="logBack" type="button" aria-label="Back"></button>
+        <h2>HISTORY</h2>
+      </div>
+      <div class="pw-tabs log-tabs" id="logTabs" role="tablist">
+        <button class="pw-tab on" type="button" data-tab="m">MATCHES</button>
+        <button class="pw-tab" type="button" data-tab="c">COINS</button>
+        <button class="pw-tab" type="button" data-tab="p">POINTS</button>
+      </div>
+      <div class="log-sum" id="logSum"></div>
+      <p class="log-note">KEPT ON THIS DEVICE AND IN THE CRAZYGAMES SAVE. GUESTS KEEP IT TOO.</p>
+      <div class="log-list" id="logList"></div>
     </div>
   </section>
 
@@ -119,6 +175,7 @@
           <p><b>PLAY</b> — jump into a match. Someone is waiting on the other pad.</p>
           <p><b>PLAY WITH A FRIEND</b> — two people on this phone. Split the screen and tap your side.</p>
           <p><b>POWERS / ARENAS</b> — buy with coins when your level is high enough.</p>
+          <p><b>HISTORY</b> — matches, coins and points. On the home screen.</p>
           <p>Tap the face or name to change your look. Tap MORE any time for this help.</p>
         </div>
       </div>
@@ -217,11 +274,12 @@
 <script id="cgsdk" async src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
 <script src="js/build.js"></script>
 <script src="js/storage.js"></script>
+<script src="js/ledger.js"></script>
 <script src="js/fit.js"></script>
-<script src="js/art.js"></script>
+<script src="js/art.js?v=2"></script>
 <script src="js/progress.js"></script>
 <script src="js/powers.js"></script>
-<script src="js/audio.js"></script>
+<script src="js/audio.js?v=2"></script>
 <script src="js/fx.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/games/freeze.js"></script>
@@ -239,6 +297,12 @@
 <script src="js/games/skip.js"></script>
 <script src="js/games/echo.js"></script>
 <script src="js/games/lander.js"></script>
+<script src="js/games/piedodge.js"></script>
+<script src="js/games/memory.js"></script>
+<script src="js/games/fillcard.js"></script>
+<script src="js/games/oddone.js"></script>
+<script src="js/games/whack.js"></script>
+<script src="js/games/quiettwin.js"></script>
 <script src="js/games/boss.js"></script>
 <script src="js/pools.js"></script>
 <script src="js/arenas.js"></script>
@@ -246,6 +310,6 @@
 <script src="js/cg.js"></script>
 <script src="js/ads.js"></script>
 <script src="js/sim.js"></script>
-<script src="js/main.js"></script>
+<script src="js/main.js?v=3"></script>
 </body>
 </html>

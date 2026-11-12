@@ -10,7 +10,7 @@
     id: 'bomb', title: 'HOT BOMB', tip: 'PASS IT FAST!', icon: 'bomb', hostAuth: true,
     start: function (A) {
       var P = A.players, holder = P[Math.floor(A.rand() * P.length)], fuse = (6500 + A.rand() * 6000) * (1 - 0.3 * A.hard);
-      var t0 = A.now(), received = t0, lastTick = 0, exploded = false;
+      var t0 = A.now(), received = t0, lastTick = 0, exploded = false, bombEl = null, lastP = -1, WAIT = '<div class="wait">' + SD.art.icon('finger', 64) + '</div>';
 
       function render() {
         if ((A.bots || []).indexOf(holder) >= 0) {           // bot holds it: pass after a short think
@@ -18,10 +18,17 @@
           A.later(function () { if (!exploded && holder === h) A.tap(h); }, (260 + (1 - A.skill) * 520 + A.rand() * 280));
         }
         P.forEach(function (i) {
-          var has = i === holder;
-          A.stage(i).innerHTML = has ? BOMB : '<div class="wait">' + SD.art.icon('finger', 64) + '</div>';
+          var has = i === holder, st = A.stage(i);
           A.padEl(i).classList.toggle('hot', has);
-          A.face(i, has ? 'worry' : 'idle');
+          if (has) {
+            if (!bombEl) { st.innerHTML = BOMB; bombEl = st.firstChild; }
+            else if (bombEl.parentNode !== st) { st.innerHTML = ''; st.appendChild(bombEl); }
+            A.face(i, 'worry');
+          } else {
+            if (bombEl && st.contains(bombEl)) st.removeChild(bombEl);
+            if (!st.querySelector('.wait')) st.innerHTML = WAIT;
+            A.face(i, 'idle');
+          }
         });
       }
       render();
@@ -39,7 +46,11 @@
         var el = now - t0, p = Math.min(1, el / fuse);
         var interval = 560 - p * 450;
         if (now - lastTick > interval) { lastTick = now; SD.audio.sfx.tick(1 + p * 1.1); }
-        var st = A.stage(holder); if (st) st.style.setProperty('--p', p.toFixed(3));
+        var sp = Math.round(p * 12) / 12;
+        if (sp !== lastP) {
+          lastP = sp;
+          var st = A.stage(holder); if (st) st.style.setProperty('--p', String(sp));
+        }
         if (el >= fuse) boom();
       });
 
@@ -55,7 +66,7 @@
         st.innerHTML = '<div class="boom-word">KABOOM</div>';
         A.padEl(holder).classList.remove('hot');
         A.face(holder, 'pied');
-        SD.audio.sfx.boom(); SD.fx.cream(c.x, c.y, 40); SD.fx.burst(c.x, c.y, 18); SD.fx.shake(520); SD.fx.flash('#fff3b0'); SD.fx.vibrate([60, 30, 140]);
+        SD.audio.sfx.boom(); SD.fx.cream(c.x, c.y, 16); SD.fx.burst(c.x, c.y, 10); SD.fx.shake(420); SD.fx.flash('#fff3b0'); SD.fx.vibrate([60, 30, 140]);
         A.later(function () {
           A.end(P.map(function (i) { return i === holder ? { p: -1, label: 'BOOM' } : { p: 0, label: '' }; }));
         }, 900);

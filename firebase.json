@@ -14,6 +14,8 @@
       "crazy-game/**",
       "node_modules/**",
       "**/.*",
+      "*.zip",
+      "_zip-cg.js",
       "*.md",
       "SERVER-GUIDE.txt",
       "DEPLOY.md",
@@ -21,6 +23,9 @@
       "package-lock.json",
       "firebase.json",
       "firestore.rules"
+    ],
+    "rewrites": [
+      { "source": "**", "destination": "/index.html" }
     ],
     "headers": [
       {
@@ -38,6 +43,20 @@
       {
         "source": "/sw.js",
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "source": "/ads.txt",
+        "headers": [
+          { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      },
+      {
+        "source": "/robots.txt",
+        "headers": [
+          { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
       }
     ]
   }

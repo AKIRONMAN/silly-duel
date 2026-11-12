@@ -16,7 +16,8 @@ service cloud.firestore {
     // Document ID: Firebase Auth uid
     // Fields: name, level, xp, coins, pies0, pies1, wins, losses, owins,
     //   olosses, unlocked (list), rooms (list), skins (list of 2),
-    //   tints (list of 2), inv (map id->0..9), arena (string), ts (int)
+    //   tints (list of 2), inv (map id->0..9), arena (string), ts (int),
+    //   hm/hc/hp (optional history lists, max 80)
     // Owner-only. Create is a fresh starter save. Updates may raise
     // level by 1, coins by 80, one extra skin, one extra room, and
     // each power-up count by 1. Opaque JSON blobs are not allowed.
@@ -102,11 +103,14 @@ service cloud.firestore {
 
     function isValidSave() {
       let d = request.resource.data;
-      return hasOnlyAllowedFields(['name', 'level', 'xp', 'coins', 'pies0', 'pies1', 'wins', 'losses', 'owins', 'olosses', 'unlocked', 'rooms', 'skins', 'tints', 'inv', 'arena', 'ts'])
+      return hasOnlyAllowedFields(['name', 'level', 'xp', 'coins', 'pies0', 'pies1', 'wins', 'losses', 'owins', 'olosses', 'unlocked', 'rooms', 'skins', 'tints', 'inv', 'arena', 'ts', 'hm', 'hc', 'hp'])
         && hasRequiredFields(['name', 'level', 'xp', 'coins', 'pies0', 'pies1', 'wins', 'losses', 'owins', 'olosses', 'unlocked', 'rooms', 'skins', 'tints', 'inv', 'arena', 'ts'])
         && validName()
         && intIn(d.level, 1, 200)
-        && intIn(d.xp, 0, 10)
+        && intIn(d.xp, 0, 3000)
+        && (!('hm' in d) || (d.hm is list && d.hm.size() <= 80))
+        && (!('hc' in d) || (d.hc is list && d.hc.size() <= 80))
+        && (!('hp' in d) || (d.hp is list && d.hp.size() <= 80))
         && intIn(d.coins, 0, 999999)
         && intIn(d.pies0, 0, 99999)
         && intIn(d.pies1, 0, 99999)

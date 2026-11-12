@@ -4,7 +4,7 @@ window.SD = window.SD || {};
 (function () {
   'use strict';
   var KEY = 'sillyduel.v1';
-  var EXTRA = ['sd_arena', 'sd_seen'];         // small extra keys kept outside the main save
+  var EXTRA = ['sd_arena', 'sd_seen', 'sd_ledger'];         // small extra keys kept outside the main save
   var UID_KEY = 'sd_uid';                       // device id used to fetch this player's Firestore save
   var defaults = {
     pies: [0, 0], plays: 0, music: true, sfx: true, voice: true,
@@ -113,7 +113,10 @@ window.SD = window.SD || {};
     reset: function () {
       var keep = {}; ['music', 'sfx', 'voice', 'keys', 'ctrlV', 'ctrlH', 'skinSwap'].forEach(function (k) { keep[k] = data[k]; });
       data = keep; normalize(); write();
-      EXTRA.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+      EXTRA.forEach(function (k) {
+        if (k === 'sd_ledger') return;
+        try { localStorage.removeItem(k); } catch (e) {}
+      });
     },
     /* local save looks like it was edited (level/coins/unlocks) before any cloud copy exists */
     boosted: function () {
@@ -125,10 +128,10 @@ window.SD = window.SD || {};
       var inv = {}, src = data.inv && typeof data.inv === 'object' && !Array.isArray(data.inv) ? data.inv : {};
       Object.keys(src).forEach(function (k) { var n = src[k] | 0; if (n > 0) inv[k] = Math.min(9, n); });
       var arena = ''; try { arena = localStorage.getItem('sd_arena') || ''; } catch (e) {}
-      return {
+      var pack = {
         name: String((data.names && data.names[0]) || 'PLAYER').slice(0, 14),
         level: Math.max(1, Math.min(200, data.level | 0)),
-        xp: Math.max(0, Math.min(10, data.xp | 0)),
+        xp: Math.max(0, Math.min(3000, data.xp | 0)),
         coins: Math.max(0, Math.min(999999, data.coins | 0)),
         pies0: data.pies[0] | 0, pies1: data.pies[1] | 0,
         wins: data.wins | 0, losses: data.losses | 0,
@@ -138,6 +141,13 @@ window.SD = window.SD || {};
         skins: ints(data.skins, 2), tints: ints(data.tints, 2),
         inv: inv, arena: String(arena).slice(0, 16), ts: Date.now()
       };
+      try {
+        if (SD.ledger && SD.ledger.packCloud) {
+          var h = SD.ledger.packCloud();
+          pack.hm = h.hm; pack.hc = h.hc; pack.hp = h.hp;
+        } else { pack.hm = []; pack.hc = []; pack.hp = []; }
+      } catch (e) { pack.hm = []; pack.hc = []; pack.hp = []; }
+      return pack;
     },
     uid: function () { try { return localStorage.getItem(UID_KEY) || data.acct || ''; } catch (e) { return data.acct || ''; } },
     setUid: function (id) {
@@ -160,6 +170,7 @@ window.SD = window.SD || {};
         data.names[0] = SD.store.cleanName(s.name) || data.names[0];
       }
       try { if (s.arena) localStorage.setItem('sd_arena', s.arena); } catch (e) {}
+      try { if (SD.ledger && SD.ledger.applyCloud) SD.ledger.applyCloud(s); } catch (e) {}
       normalize(); write();
       mute = false;
       return true;

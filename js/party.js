@@ -156,7 +156,7 @@
     show('<h2>NO SERVER FOUND</h2><div class="on-face">' + art.face(0, 'sad') + '</div><p class="on-msg">COULD NOT REACH THE GAME SERVER<small>Online play needs the Silly Duel server. See SERVER-GUIDE.txt (local wifi or internet).</small></p>' + back('OK'));
     bind('#pBack', leave);
   }
-  function open() { var tap = document.getElementById('tapStart'); if (tap) tap.hidden = true; root.hidden = false; $('#home').hidden = true; tok++; V = null; if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('party'); }
+  function open() { var tap = document.getElementById('tapStart'); if (tap) tap.hidden = true; root.hidden = false; $('#home').hidden = true; tok++; V = null; try { if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('party'); } catch (e) {} }
   function leave() {
     tok++; clearTimeout(retry); retry = null; resuming = false; remember('');
     if (watching && SD.engine.watching && SD.engine.watching()) { watchMid = -1; watching = false; try { SD.engine.home(); } catch (e) {} }
@@ -164,7 +164,7 @@
     hangUp();
     outbox = []; V = null; queued = false; watching = false;
     root.hidden = true; $('#home').hidden = false; if (SD.main && SD.main.refresh) SD.main.refresh();
-    if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('home');
+    try { if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('home'); } catch (e) {}
   }
 
   /* ---------- messages ---------- */
@@ -217,7 +217,7 @@
   /* the engine calls this when a bracket match screen is left */
   P.back = function () {
     curConn = null; inMatch = false; $('#home').hidden = true; root.hidden = false; wantReady = {};
-    if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('party');
+    try { if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('party'); } catch (e) {}
     if (pending) return launch();
     if (V) render(); else lost();
   };
@@ -391,7 +391,7 @@
         root.hidden = false; $('#home').hidden = true;
         if (watchMid === wm.mid) watchMid = -1;
         if (V) render();
-        if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('party');
+        try { if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('party'); } catch (e) {}
       }
     });
   }
