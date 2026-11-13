@@ -12,13 +12,13 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icon-192.png">
-<link rel="stylesheet" href="css/style.css?v=91">
+<link rel="stylesheet" href="css/style.css?v=103">
 <link rel="stylesheet" href="css/games2.css?v=63">
 <link rel="stylesheet" href="css/games3.css?v=64">
   <link rel="stylesheet" href="css/arenas.css?v=4">
   <link rel="stylesheet" href="css/dock.css?v=63">
   <link rel="stylesheet" href="css/skins.css">
-  <link rel="stylesheet" href="css/party.css">
+  <link rel="stylesheet" href="css/party.css?v=3">
 <link rel="stylesheet" href="css/intro.css?v=70">
 <style>
 #boot{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:linear-gradient(160deg,#ffe27a,#ff9ecf 55%,#c9b6ff);font-family:'Silkscreen','Courier New',ui-monospace,monospace;font-weight:700;color:#2a1650;text-align:center}
@@ -94,6 +94,7 @@
       <p id="cereLine"></p>
       <div id="cereXp" class="cere-xp"></div>
       <div id="cereRate" class="cere-rate" hidden></div>
+      <div id="cereEmRow" class="cere-em-row" hidden></div>
       <div class="cere-btns" id="cereBtns" hidden></div>
     </div>
   </section>
@@ -228,6 +229,7 @@
         <div class="wd-colors" id="wdColors" role="listbox" aria-label="Color"></div>
         <label class="wd-label" for="wdNameIn">NAME</label>
         <input id="wdNameIn" class="on-in wd-in" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <p class="on-err" id="wdNameErr" hidden role="alert"></p>
         <button class="gel wd-signin" id="wdSignIn" type="button"><span>SIGN IN</span></button>
         <p class="on-note" id="wdSaveNote">Your details are not saved. Sign in to save them on every phone.</p>
         <p class="on-note" id="wdNameNote"></p>
@@ -267,6 +269,7 @@
       <p class="on-msg" id="askMsg"></p>
       <button class="gel" id="askNo" type="button"><span>KEEP WAITING</span></button>
       <button class="gel alt" id="askYes" type="button"><span>LEAVE</span></button>
+      <button class="gel danger" id="askDanger" type="button" hidden><span>CLOSE THE ROOM</span></button>
     </div>
   </div>
 
@@ -280,16 +283,16 @@
 </div>
 
 <script src="js/build.js"></script>
-<script src="js/storage.js?v=64"></script>
+<script src="js/storage.js?v=69"></script>
 <script src="js/ledger.js?v=1"></script>
 <script src="js/fit.js?v=54"></script>
 <script src="js/firebase-config.js"></script>
-<script src="js/art.js?v=66"></script>
+<script src="js/art.js?v=67"></script>
 <script src="js/progress.js?v=2"></script>
 <script src="js/powers.js?v=63"></script>
-<script src="js/audio.js?v=2"></script>
+<script src="js/audio.js?v=4"></script>
 <script src="js/fx.js"></script>
-<script src="js/engine.js?v=71"></script>
+<script src="js/engine.js?v=82"></script>
 <script src="js/games/freeze.js"></script>
 <script src="js/games/dodge.js"></script>
 <script src="js/games/beat.js"></script>
@@ -314,13 +317,13 @@
 <script src="js/games/boss.js"></script>
 <script src="js/pools.js?v=3"></script>
   <script src="js/arenas.js"></script>
-<script src="js/net.js?v=65"></script>
+<script src="js/net.js?v=69"></script>
 <script src="js/lobby.js?v=61"></script>
 <script src="js/server-config.js"></script>
-<script src="js/party.js?v=66"></script>
+<script src="js/party.js?v=71"></script>
 <script src="js/intro.js?v=72"></script>
 <script src="js/ads-config.js"></script>
 <script src="js/ads.js?v=5"></script>
-<script src="js/main.js?v=78"></script>
+<script src="js/main.js?v=84"></script>
 </body>
 </html>

@@ -13,9 +13,9 @@ window.SD = window.SD || {};
     tints: [0, 0],                 // color palette index per player (0 = skin's own colors)
     rooms: ['bubble'],             // play rooms the player bought
     unlocked: [0, 1],              // skin ids the player owns
-    level: 1, xp: 0, wins: 0, losses: 0, owins: 0, olosses: 0, guestName: '', coins: 0, inv: {}, keys: ['Q', 'P'], ctrlV: 'bottom', ctrlH: 'right', names: ['', 'FRIEND'], acct: '', games: 5
+    level: 1, xp: 0, wins: 0, losses: 0, owins: 0, olosses: 0, guestName: '', coins: 0, inv: {}, keys: ['Q', 'P'], ctrlV: 'bottom', ctrlH: 'right', names: ['', 'FRIEND'], acct: '', games: 5, named: 0, editedAt: 0
   };
-  var data = {}, onChange = null, mute = false;
+  var data = {}, onChange = null, mute = false, editedAt = 0;
   var CG = SD.BUILD === 'cg';
   var persist = {
     getItem: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -46,15 +46,24 @@ window.SD = window.SD || {};
     }
     if (!data.names[1]) data.names[1] = 'FRIEND';
   }
-  if (!CG) {
-    try { data = JSON.parse(persist.getItem(KEY)) || {}; } catch (e) { data = {}; }
-  }
+  try { data = JSON.parse(persist.getItem(KEY)) || {}; } catch (e) { data = {}; }
   normalize();
+  editedAt = +data.editedAt || 0;
 
   function write() {
-    try { persist.setItem(KEY, JSON.stringify(data)); } catch (e) {}
+    var raw;
+    try { raw = JSON.stringify(data); } catch (e) { return; }
+    try { persist.setItem(KEY, raw); } catch (e) {}
+    if (CG) { try { localStorage.setItem(KEY, raw); } catch (e) {} }
   }
-  function save() { write(); if (!mute && onChange) onChange(); }
+  function save() {
+    if (!mute) {
+      data.editedAt = Date.now();
+      editedAt = data.editedAt;
+    }
+    write();
+    if (!mute && onChange) onChange();
+  }
   function ints(arr, n) { var a = Array.isArray(arr) ? arr.slice(0, n) : []; while (a.length < n) a.push(0); return a.map(function (x) { return x | 0; }); }
 
   SD.store = {
@@ -66,7 +75,18 @@ window.SD = window.SD || {};
     addPlay: function () { data.plays = (data.plays || 0) + 1; save(); },
     pies: function () { return data.pies.slice(); },
     cleanName: function (n) { return String(n || '').replace(/[^A-Za-z0-9_ ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase().slice(0, 12); },
-    setName: function (i, n) { n = SD.store.cleanName(n); if (!n) return false; data.names[i] = n; save(); return true; },
+    setName: function (i, n, opts) {
+      n = SD.store.cleanName(n); if (!n) return false;
+      var same = data.names[i] === n;
+      var mark = i === 0 && !(opts && opts.soft);
+      if (same && (!mark || data.named)) return true;
+      data.names[i] = n;
+      if (mark) data.named = 1;
+      save();
+      return true;
+    },
+    editedAt: function () { return Math.max(+editedAt || 0, +data.editedAt || 0); },
+    markSynced: function (ts) { editedAt = +ts || 0; data.editedAt = editedAt; write(); },
     name: function (i) { return data.names[i]; },
     save: save,
     onChange: function (fn) { onChange = fn; },
@@ -74,15 +94,19 @@ window.SD = window.SD || {};
     extraSet: function (k, v) { try { if (v == null) persist.removeItem(k); else persist.setItem(k, String(v)); } catch (e) {} },
     attach: function (backend) {
       if (!backend || typeof backend.getItem !== 'function') return false;
+      var prev = data, prevEdit = +editedAt || 0;
       persist = backend;
       try {
-        var raw = persist.getItem(KEY);
+        var raw = persist.getItem(KEY), remote = null;
         if (raw) {
-          var next = JSON.parse(raw);
-          if (next && typeof next === 'object') data = next;
-        } else write();
-      } catch (e) {}
+          try { remote = JSON.parse(raw); } catch (er) { remote = null; }
+        }
+        var remoteTs = remote ? ((+remote.editedAt || 0) || (+remote.cloudTs || 0)) : 0;
+        if (remote && typeof remote === 'object' && !(prevEdit && prevEdit > remoteTs)) data = remote;
+        else data = prev;
+      } catch (e) { data = prev; }
       normalize();
+      write();
       EXTRA.forEach(function (k) {
         try {
           if (persist.getItem(k) != null) return;
@@ -103,8 +127,8 @@ window.SD = window.SD || {};
     load: function (text) {
       var o; try { o = JSON.parse(text); } catch (e) { return false; }
       if (!o || typeof o.d !== 'object') return false;
-      var keep = { acct: data.acct, cloudTs: data.cloudTs };
-      data = o.d; data.acct = keep.acct; data.cloudTs = keep.cloudTs;
+      var keep = { acct: data.acct, cloudTs: data.cloudTs, nameLock: data.nameLock };
+      data = o.d; data.acct = keep.acct; data.cloudTs = keep.cloudTs; data.nameLock = keep.nameLock;
       normalize(); write();
       EXTRA.forEach(function (k) { try { if (o.x && o.x[k] != null) persist.setItem(k, o.x[k]); else persist.removeItem(k); } catch (e) {} });
       return true;
@@ -112,7 +136,7 @@ window.SD = window.SD || {};
     /* back to a fresh guest on this phone; sound and control settings stay */
     reset: function () {
       var keep = {}; ['music', 'sfx', 'voice', 'keys', 'ctrlV', 'ctrlH', 'skinSwap'].forEach(function (k) { keep[k] = data[k]; });
-      data = keep; normalize(); write();
+      data = keep; editedAt = 0; normalize(); write();
       EXTRA.forEach(function (k) {
         if (k === 'sd_ledger') return;
         try { localStorage.removeItem(k); } catch (e) {}
@@ -139,7 +163,8 @@ window.SD = window.SD || {};
         unlocked: (data.unlocked || [0, 1]).slice(0, 16),
         rooms: (data.rooms || ['bubble']).slice(0, 10),
         skins: ints(data.skins, 2), tints: ints(data.tints, 2),
-        inv: inv, arena: String(arena).slice(0, 16), ts: Date.now()
+        inv: inv, arena: String(arena).slice(0, 16), named: data.named ? 1 : 0,
+        ts: Math.max(Date.now(), +data.editedAt || 0, +editedAt || 0)
       };
       try {
         if (SD.ledger && SD.ledger.packCloud) {
@@ -169,6 +194,7 @@ window.SD = window.SD || {};
         if (!Array.isArray(data.names)) data.names = ['', 'FRIEND'];
         data.names[0] = SD.store.cleanName(s.name) || data.names[0];
       }
+      if (s.named) data.named = 1;
       try { if (s.arena) localStorage.setItem('sd_arena', s.arena); } catch (e) {}
       try { if (SD.ledger && SD.ledger.applyCloud) SD.ledger.applyCloud(s); } catch (e) {}
       normalize(); write();

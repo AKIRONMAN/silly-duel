@@ -120,16 +120,19 @@ function kickIdle() {
 }
 
 function gamesOf(c) { var n = c && c.want | 0; return n === 3 || n === 8 ? n : 5; }
-function pickTotal(kind, a, b) {
+function pickTotal(kind, a, b, games) {
   if (kind === 'tour') return 3;
-  if (kind !== 'random') return 5;
+  if (kind === 'room') {
+    var g = games | 0;
+    return (g === 3 || g === 8) ? g : 5;
+  }
   return gamesOf(a) === gamesOf(b) ? gamesOf(a) : 5;
 }
 function startMatch(a, b, kind, extra) {
   var m = { mid: nextMid++, a: a.id, b: b.id, kind: kind, done: false, s: [0, 0], g: '', seed: 0, arena: 0, snap: null }, seed = rnd(), al = arenaLevel(a, b);
   for (var k in extra || {}) m[k] = extra[k];
   m.seed = seed; m.arena = al;
-  var total = pickTotal(kind, a, b);
+  var total = pickTotal(kind, a, b, extra && extra.games);
   matches[m.mid] = m; a.match = b.match = m.mid;
   a.send({ t: 'match', mid: m.mid, kind: kind, role: 'host', seed: seed, you: info(a), opp: info(b), arena: al, total: total, fallback: kind === 'random' && total !== gamesOf(a), room: m.room || '' });
   b.send({ t: 'match', mid: m.mid, kind: kind, role: 'guest', seed: seed, you: info(b), opp: info(a), arena: al, total: total, fallback: kind === 'random' && total !== gamesOf(b), room: m.room || '' });
@@ -139,18 +142,31 @@ function dropMatch(m) { if (!m) return; delete matches[m.mid]; delete watchers[m
 
 /* party rooms */
 function pubRoom(r) {
-  return { code: r.code, phase: r.phase, round: r.round, rounds: r.rounds, host: r.host, champ: r.champ, size: r.size, pub: !!r.pub,
+  return { code: r.code, phase: r.phase, round: r.round, rounds: r.rounds, host: r.host, champ: r.champ, size: r.size, pub: !!r.pub, games: (r.games === 3 || r.games === 8) ? r.games : 5,
     players: r.players.map(function (id) { var c = clients[id]; return c ? { id: id, name: c.name, level: c.level, skin: c.skin, tint: c.tint | 0, out: !!r.out[id], away: !c.ws } : null; }).filter(Boolean),
-    matches: r.matches.map(function (m) { return { mid: m.mid, a: m.a, b: m.b, w: m.w, s: m.s, g: m.g, bye: !!m.bye, ra: !!m.ra, rb: !!m.rb, live: !!m.live, n: m.n }; }) };
+    matches: r.matches.map(function (m) { return { mid: m.mid, a: m.a, b: m.b, w: m.w, s: m.s, g: m.g, bye: !!m.bye, ra: !!m.ra, rb: !!m.rb, live: !!m.live, n: m.n }; }),
+    chats: (r.chats || []).slice(-24) };
 }
 function bcast(r) {
   var raw = JSON.stringify({ t: 'room', v: pubRoom(r) });
   r.players.forEach(function (id) { var c = clients[id]; if (c && c.ws) c.ws.sendRaw(raw); });
 }
+function closeRoom(r, why) {
+  if (!r || !rooms[r.code]) return;
+  var ids = r.players.slice(), msg = { t: 'closed', e: why || 'ROOM CLOSED' };
+  delete rooms[r.code];
+  ids.forEach(function (id) {
+    var p = clients[id];
+    if (!p) return;
+    if (p.room === r.code) p.room = null;
+    p.send(msg);
+  });
+}
 function leaveRoom(c) {
   var r = c.room && rooms[c.room]; c.room = null; if (!r) return;
   if (r.phase === 'lobby') {
     r.players = r.players.filter(function (id) { return id !== c.id; });
+    if (r.hostOffer === c.id || r.hostOfferFrom === c.id) { r.hostOffer = 0; r.hostOfferFrom = 0; }
     if (!r.players.length) { delete rooms[r.code]; return; }
     if (r.host === c.id) r.host = r.players[0];
     bcast(r);
@@ -162,6 +178,23 @@ function leaveRoom(c) {
     var alive = r.players.filter(function (id) { return !r.left[id]; });
     if (!alive.length) { delete rooms[r.code]; }
   }
+}
+function kickFromRoom(r, id) {
+  var p = clients[id];
+  if (!p || p.room !== r.code) return false;
+  r.players = r.players.filter(function (x) { return x !== id; });
+  p.room = null;
+  p.send({ t: 'kicked', e: 'HOST REMOVED YOU' });
+  if (!r.players.length) { delete rooms[r.code]; return true; }
+  if (r.host === id) r.host = r.players[0];
+  bcast(r);
+  return true;
+}
+var CHAT_PRE = { hurry: 'HURRY!', away: 'REMOVE THE AWAY ONE', start: 'START!', doing: 'WHAT ARE YOU DOING?', angry: 'ANGRY!', lol: '😂', wave: '👏', ok: '👍', cry: '😢', fire: '🔥', wait: 'WAIT!' };
+function chatText(m) {
+  if (m && m.pre && CHAT_PRE[m.pre]) return CHAT_PRE[m.pre];
+  var s = clean(m && m.msg, 15).replace(/[<>]/g, '').trim();
+  return s.slice(0, 15);
 }
 function buildRound(r) {
   var alive = shuffle(r.players.filter(function (id) { return !r.out[id]; }));
@@ -253,7 +286,13 @@ function specTo(mid, slot, msg) {
 }
 function handle(c, m) {
   switch (m.t) {
-    case 'hello': c.name = clean(m.name, 12) || 'PLAYER'; c.level = Math.max(1, Math.min(99, m.level | 0 || 1)); c.skin = Math.max(0, Math.min(40, m.skin | 0)); c.tint = Math.max(0, Math.min(9, m.tint | 0)); break;
+    case 'hello':
+      c.name = clean(m.name, 12) || 'PLAYER';
+      c.level = Math.max(1, Math.min(99, m.level | 0 || 1));
+      c.skin = Math.max(0, Math.min(40, m.skin | 0));
+      c.tint = Math.max(0, Math.min(9, m.tint | 0));
+      if (c.room && rooms[c.room]) bcast(rooms[c.room]);
+      break;
     case 'quick': {
       if (c.match || c.room) return; dequeue(c);
       var g = m.games | 0; c.want = (g === 3 || g === 8) ? g : 5;
@@ -273,8 +312,49 @@ function handle(c, m) {
       break; }
     case 'quickCancel': dequeue(c); break;
     case 'create': {
-      if (c.room || c.match) return; var k = code(), r = { code: k, host: c.id, players: [c.id], phase: 'lobby', round: 0, rounds: 0, matches: [], out: {}, left: {}, champ: null, size: 0, pub: !!m.pub };
+      if (c.room || c.match) return;
+      var g0 = m.games | 0; g0 = (g0 === 3 || g0 === 8) ? g0 : 5; c.want = g0;
+      var k = code(), r = { code: k, host: c.id, players: [c.id], phase: 'lobby', round: 0, rounds: 0, matches: [], out: {}, left: {}, champ: null, size: 0, pub: !!m.pub, games: g0, chats: [] };
       rooms[k] = r; c.room = k; bcast(r); break; }
+    case 'setGames': {
+      var rg = rooms[c.room]; if (!rg || rg.host !== c.id || rg.phase !== 'lobby') return;
+      var g1 = m.games | 0; g1 = (g1 === 3 || g1 === 8) ? g1 : 5;
+      rg.games = g1; c.want = g1;
+      rg.players.forEach(function (id) { var p = clients[id]; if (p) p.want = g1; });
+      bcast(rg); break; }
+    case 'closeRoom': {
+      var rx = rooms[c.room]; if (!rx || rx.host !== c.id || rx.phase !== 'lobby') return;
+      closeRoom(rx, 'HOST CLOSED THE ROOM'); break; }
+    case 'offerHost': {
+      var rh = rooms[c.room]; if (!rh || rh.host !== c.id || rh.phase !== 'lobby') return;
+      var nid = m.id | 0;
+      if (nid === c.id || rh.players.indexOf(nid) < 0) return;
+      rh.hostOffer = nid; rh.hostOfferFrom = c.id;
+      var tgt = clients[nid];
+      if (tgt) tgt.send({ t: 'hostOffer', from: c.id, name: c.name });
+      c.send({ t: 'hostOfferSent', id: nid });
+      break; }
+    case 'acceptHost': {
+      var ra = rooms[c.room]; if (!ra || ra.phase !== 'lobby') return;
+      if (ra.hostOffer !== c.id || ra.hostOfferFrom !== ra.host) { ra.hostOffer = 0; ra.hostOfferFrom = 0; return; }
+      ra.host = c.id; ra.hostOffer = 0; ra.hostOfferFrom = 0;
+      bcast(ra);
+      c.send({ t: 'hostNow' });
+      break; }
+    case 'kick': {
+      var rk = rooms[c.room]; if (!rk || rk.host !== c.id || rk.phase !== 'lobby') return;
+      var kid = m.id | 0;
+      if (kid === c.id || rk.players.indexOf(kid) < 0) return;
+      kickFromRoom(rk, kid); break; }
+    case 'chat': {
+      var rc = rooms[c.room]; if (!rc || (rc.phase !== 'lobby' && rc.phase !== 'tree' && rc.phase !== 'between')) return;
+      var txt = chatText(m); if (!txt) return;
+      if (!rc.chats) rc.chats = [];
+      var row = { id: c.id, name: c.name, msg: txt, ts: Date.now() };
+      rc.chats.push(row); if (rc.chats.length > 40) rc.chats = rc.chats.slice(-40);
+      var rawC = JSON.stringify({ t: 'chat', v: row, code: rc.code });
+      rc.players.forEach(function (id) { var p = clients[id]; if (p && p.ws) p.ws.sendRaw(rawC); });
+      break; }
     case 'list': {
       var list = [];
       for (var k2 in rooms) {
@@ -288,7 +368,7 @@ function handle(c, m) {
       if (!r2) return c.send({ t: 'err', e: 'NO PARTY WITH THAT CODE' });
       if (r2.phase !== 'lobby') return c.send({ t: 'err', e: 'THAT PARTY ALREADY STARTED' });
       if (r2.players.length >= 10) return c.send({ t: 'err', e: 'THE PARTY IS FULL (10)' });
-      r2.players.push(c.id); c.room = r2.code; bcast(r2); break; }
+      r2.players.push(c.id); c.room = r2.code; c.want = (r2.games === 3 || r2.games === 8) ? r2.games : 5; bcast(r2); break; }
     case 'leave': leaveRoom(c); unwatchAll(c.id); c.send({ t: 'left' }); break;
     case 'start': {
       var r3 = rooms[c.room]; if (!r3 || r3.host !== c.id || r3.phase !== 'lobby') return;
@@ -296,7 +376,7 @@ function handle(c, m) {
       var away = r3.players.filter(function (id) { return clients[id] && !clients[id].ws; })[0];
       if (away) return c.send({ t: 'err', e: 'WAITING FOR ' + clients[away].name + ' TO COME BACK' });
       r3.size = n;
-      if (n === 2) { var a = clients[r3.players[0]], b = clients[r3.players[1]]; delete rooms[r3.code]; a.room = b.room = null; startMatch(a, b, 'room'); return; }
+      if (n === 2) { var a = clients[r3.players[0]], b = clients[r3.players[1]]; var g2 = r3.games; delete rooms[r3.code]; a.room = b.room = null; startMatch(a, b, 'room', { games: g2 }); return; }
       r3.phase = 'tree'; r3.out = {}; r3.round = 0; r3.rounds = Math.ceil(Math.log2(n)); buildRound(r3); break; }
     case 'ready': {
       var r4 = rooms[c.room]; if (!r4 || r4.phase !== 'tree') return;

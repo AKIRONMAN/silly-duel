@@ -1,5 +1,5 @@
 /* Offline cache. Bump VERSION whenever you upload a new build so players get the update. */
-var VERSION = 'silly-duel-v111';
+var VERSION = 'silly-duel-v132';
 var FILES = [
   './', './index.html', './manifest.webmanifest', './css/style.css', './css/games2.css', './css/games3.css', './css/arenas.css', './css/skins.css', './css/dock.css', './css/party.css', './css/intro.css',
   './assets/fonts/Fredoka.ttf', './assets/fonts/Silkscreen-Regular.ttf', './assets/fonts/Silkscreen-Bold.ttf', './js/build.js', './js/powers.js', './js/storage.js', './js/ledger.js', './js/fit.js', './js/firebase-config.js', './js/art.js', './js/progress.js', './js/audio.js', './js/fx.js', './js/engine.js',
@@ -14,10 +14,31 @@ self.addEventListener('install', function (e) {
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
     return Promise.all(keys.filter(function (k) { return k !== VERSION; }).map(function (k) { return caches.delete(k); }));
-  }).then(function () { return self.clients.claim(); }));
+  }).then(function () { return self.clients.claim(); }).then(function () {
+    return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+      list.forEach(function (c) { try { c.postMessage({ t: 'sw', v: VERSION }); } catch (er) {} });
+    });
+  }));
+});
+self.addEventListener('message', function (e) {
+  if (e.data && e.data.t === 'skip') self.skipWaiting();
 });
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).then(function (res) {
+        if (res && res.ok) {
+          var copy = res.clone();
+          caches.open(VERSION).then(function (c) { c.put(e.request, copy); });
+        }
+        return res;
+      }).catch(function () {
+        return caches.match(e.request).then(function (hit) { return hit || caches.match('./index.html'); });
+      })
+    );
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then(function (hit) {
       return hit || fetch(e.request).then(function (res) {

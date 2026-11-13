@@ -33,6 +33,7 @@
     }
     pageStack = [];
     $('#home').hidden = false; refresh();
+    try { if (SD.fresh && SD.fresh.try) SD.fresh.try(); } catch (e) {}
     try { if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('home'); } catch (e) {}
   }
   SD.page = { open: pageOpen, close: pageClose };
@@ -44,14 +45,28 @@
     document.getElementById('askMsg').textContent = opts.msg || 'Do you want to close this?';
     document.getElementById('askYes').querySelector('span').textContent = opts.yes || 'LEAVE';
     document.getElementById('askNo').querySelector('span').textContent = opts.no || 'KEEP WAITING';
+    var danger = document.getElementById('askDanger');
+    if (danger) {
+      danger.hidden = !opts.danger;
+      if (opts.danger) danger.querySelector('span').textContent = opts.danger;
+      danger.onclick = null;
+    }
     el.hidden = false;
     var yes = document.getElementById('askYes'), no = document.getElementById('askNo');
     var done = function (ok) {
       el.hidden = true; yes.onclick = no.onclick = null;
+      if (danger) danger.onclick = null;
       if (ok && onYes) onYes();
     };
     yes.onclick = function () { au.sfx.select(); done(true); };
     no.onclick = function () { au.sfx.tap(); done(false); };
+    if (danger && opts.danger) {
+      danger.onclick = function () {
+        au.sfx.select();
+        el.hidden = true; yes.onclick = no.onclick = null; danger.onclick = null;
+        if (opts.onDanger) opts.onDanger();
+      };
+    }
   };
 
   var CG = SD.BUILD === 'cg';
@@ -495,6 +510,72 @@
 
   /* ---------- skin picker / profile ---------- */
   var wdTimer = 0, wdSlot = 0, wdSel = 0;
+  var nameTimer = 0, nameSeq = 0, nameBlocked = false;
+  function nameErr(msg) {
+    nameBlocked = !!msg;
+    var el = $('#wdNameErr'), ni = $('#wdNameIn');
+    if (ni) ni.classList.toggle('bad', !!msg);
+    if (!el) return;
+    el.hidden = !msg;
+    el.textContent = msg || '';
+  }
+  function heldName() {
+    var raw = String(st.get('nameLock') || ''), i = raw.indexOf('\n');
+    if (i < 0) return '';
+    var uid = '';
+    try {
+      var u = SD.net && SD.net.backend && SD.net.backend.user && SD.net.backend.user();
+      uid = (u && u.uid) || '';
+    } catch (e) {}
+    return raw.slice(0, i) === uid ? raw.slice(i + 1) : '';
+  }
+  /* Look up the name after typing pauses. This does not save. */
+  function lookupName(raw) {
+    var n = st.cleanName(raw), seq = ++nameSeq;
+    if (!n || wdSlot !== 0) { nameErr(''); return Promise.resolve(true); }
+    if (heldName() === n) { nameErr(''); return Promise.resolve(true); }
+    if (!SD.net || !SD.net.nameTaken || !SD.net.configured()) { nameErr(''); return Promise.resolve(true); }
+    return SD.net.nameTaken(n).then(function (taken) {
+      if (seq !== nameSeq) return !taken;
+      var cur = $('#wdNameIn');
+      if (!cur || st.cleanName(cur.value) !== n) return !taken;
+      nameErr(taken ? 'THIS NAME IS ALREADY TAKEN' : '');
+      return !taken;
+    }, function () {
+      if (seq === nameSeq) nameErr('');
+      return true;
+    });
+  }
+  function onNameType() {
+    if (wdSlot !== 0) { nameErr(''); return; }
+    nameErr('');
+    clearTimeout(nameTimer);
+    var raw = $('#wdNameIn').value;
+    nameTimer = setTimeout(function () { lookupName(raw); }, 500);
+  }
+  function watchName() {
+    var ni = $('#wdNameIn');
+    if (!ni || ni._watchName) return;
+    ni._watchName = true;
+    ni.addEventListener('input', onNameType);
+  }
+  function commitPlayerName() {
+    var ni = $('#wdNameIn');
+    clearTimeout(nameTimer);
+    if (!ni || ni.readOnly) return Promise.resolve(true);
+    if (wdSlot !== 0) { st.setName(wdSlot, ni.value); return Promise.resolve(true); }
+    return lookupName(ni.value).then(function (ok) {
+      if (!ok) return false;
+      st.setName(0, ni.value);
+      return true;
+    });
+  }
+  function afterNameSaved(then) {
+    if (wdSlot !== 0 || !SD.net || !SD.net.sync) { then(); return; }
+    var p = SD.net.sync();
+    if (p && p.then) p.then(function () { if (!nameBlocked) then(); }, then);
+    else then();
+  }
   var MOODS = ['idle', 'cheer', 'laugh', 'worry', 'sad', 'dizzy', 'pied'];
   function wdTint() { return ((st.get('tints') || [0, 0])[wdSlot] | 0); }
   function wdFace(mood, id) { return art.face(wdSlot, mood, { skin: id, tint: wdTint() }); }
@@ -506,7 +587,10 @@
     if (title) { title.hidden = !p2; title.textContent = p2 ? 'PLAYER 2 LOOK' : ''; }
     var ni = $('#wdNameIn');
     ni.value = st.name(slot); ni.readOnly = false;
+    watchName();
+    nameErr('');
     $('#wdNameNote').textContent = slot === 0 ? (CG ? 'Tap the name to change it.' : 'Tap the name to change it. This is shown online and on the TOP 100.') : '';
+    if (slot === 0) lookupName(ni.value);
     if (slot === 0) { buildSettings(); showWdTab(wdTab); } else showWdTab('av');
     paintWardrobe();
     var k = 0;
@@ -525,8 +609,8 @@
     var before = p2 ? $('#wdScroll') : null;
     var lab = look.querySelector('label.wd-label') || av.querySelector('label.wd-label');
     var nodes = p2
-      ? [ $('#wdColors'), lab, $('#wdNameIn'), $('#wdNameNote') ]
-      : [ $('#wdColors'), lab, $('#wdNameIn'), $('#wdSignIn'), $('#wdSaveNote'), $('#wdNameNote') ];
+      ? [ $('#wdColors'), lab, $('#wdNameIn'), $('#wdNameErr'), $('#wdNameNote') ]
+      : [ $('#wdColors'), lab, $('#wdNameIn'), $('#wdNameErr'), $('#wdSignIn'), $('#wdSaveNote'), $('#wdNameNote') ];
     nodes.forEach(function (n) {
       if (!n) return;
       if (before && before.parentNode === host) host.insertBefore(n, before);
@@ -582,11 +666,15 @@
     });
   }
   function closeWardrobe() {
-    clearInterval(wdTimer); au.sfx.tap(); au.music.refresh();
-    var ni = $('#wdNameIn');
-    if (!ni.readOnly) { if (st.setName(wdSlot, ni.value) && wdSlot === 0 && SD.net) SD.net.sync(); }
-    pageClose('wardrobe');
-    if (!$('#offline').hidden) renderOffline();
+    commitPlayerName().then(function (ok) {
+      if (!ok) { au.sfx.bwoop(); return; }
+      afterNameSaved(function () {
+        clearInterval(wdTimer); au.sfx.tap(); au.music.refresh();
+        pageClose('wardrobe');
+        if (!$('#offline').hidden) renderOffline();
+        try { if (wdSlot === 0 && SD.party && SD.party.hello) SD.party.hello(); } catch (e) {}
+      });
+    });
   }
 
   var INFO_PANES = { about: 'infoAbout', terms: 'infoTerms', help: 'infoHelp', feed: 'infoFeed', hist: 'infoHist' };
@@ -803,6 +891,62 @@
   }
   SD.main = { refresh: refresh, gamesN: gamesN, askGames: askGames };
 
+  /* New PWA build: activate in the background. Never location.reload() the live
+     page — that re-shows LOADING + TAP TO PLAY (after leaving a room, or 2–3 times
+     on open). Next cold open already gets new files (navigate is network-first). */
+  var swReg = null;
+  function swBusy() {
+    try {
+      if (SD.engine) {
+        if (SD.engine.watching && SD.engine.watching()) return true;
+        if (SD.engine.playing && SD.engine.playing()) return true;
+      }
+    } catch (e) {}
+    try { if (SD.party && SD.party.busy && SD.party.busy()) return true; } catch (e) {}
+    var boot = document.getElementById('boot');
+    if (boot && boot.parentNode && !boot.classList.contains('out')) return true;
+    var tap = document.getElementById('tapStart');
+    if (tap && !tap.hidden) return true;
+    var intro = document.getElementById('intro');
+    if (intro && !intro.hidden) return true;
+    var ids = ['arena', 'ceremony', 'party', 'online', 'pick'];
+    for (var i = 0; i < ids.length; i++) {
+      var el = document.getElementById(ids[i]);
+      if (el && !el.hidden) return true;
+    }
+    try { if (sessionStorage.getItem('sd_room')) return true; } catch (e) {}
+    if (/[?&](party|room)=[A-Za-z]{4}/.test(location.search || '')) return true;
+    return false;
+  }
+  function swActivate(reg) {
+    reg = reg || swReg;
+    if (!reg || !reg.waiting || swBusy()) return;
+    try { reg.waiting.postMessage({ t: 'skip' }); } catch (e) {}
+  }
+  SD.fresh = { try: function () { swActivate(); } };
+  function watchSw() {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      swReg = reg;
+      swActivate(reg);
+      reg.addEventListener('updatefound', function () {
+        var inst = reg.installing;
+        if (!inst) return;
+        inst.addEventListener('statechange', function () {
+          if (inst.state === 'installed') swActivate(reg);
+        });
+      });
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) return;
+        try { reg.update(); } catch (e) {}
+        swActivate(reg);
+      });
+      setInterval(function () {
+        try { reg.update(); } catch (e) {}
+        swActivate(reg);
+      }, 10 * 60 * 1000);
+    }).catch(function () {});
+  }
+
   function init() {
     SD.fx.init();
     SD.engine.init();
@@ -825,10 +969,12 @@
     var sign = $('#wdSignIn');
     if (sign) sign.addEventListener('click', function () {
       au.sfx.select();
-      var ni = $('#wdNameIn');
-      if (ni && !ni.readOnly) { if (st.setName(wdSlot, ni.value) && wdSlot === 0 && SD.net) SD.net.sync(); }
-      if (SD.lobby && SD.lobby.open) SD.lobby.open();
+      commitPlayerName().then(function (ok) {
+        if (!ok) { au.sfx.bwoop(); return; }
+        afterNameSaved(function () { if (SD.lobby && SD.lobby.open) SD.lobby.open(); });
+      });
     });
+    if (SD.net) SD.net.onNameRejected = function () { nameErr('THIS NAME IS ALREADY TAKEN'); };
     function hideBoot(then) {
       var el = document.getElementById('boot');
       var t0 = Date.now();
@@ -865,6 +1011,7 @@
         if (au.isOn('sfx')) { try { au.sfx.select(); } catch (e) {} }
         ov.removeEventListener('pointerdown', go);
         window.removeEventListener('keydown', go);
+        try { swActivate(); } catch (e) {}
         if (first && SD.intro) SD.intro.play(function () { if (au.isOn('sfx')) au.sfx.select(); });
       }
       ov.addEventListener('pointerdown', go);
@@ -887,10 +1034,8 @@
     } else {
       try { if (SD.ads && SD.ads.showHomeBanner) SD.ads.showHomeBanner(); } catch (e) {}
     }
-    if (!CG && SD.net) SD.net.boot().then(function (loaded) { if (loaded) { refresh(); au.music.refresh(); } });
-    if (!CG && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
-      navigator.serviceWorker.register('sw.js').catch(function () {});
-    }
+    if (!CG && SD.net) SD.net.boot().then(function () { refresh(); au.music.refresh(); });
+    if (!CG && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) watchSw();
     var m = /[?&]room=([A-Za-z]{4})/.exec(location.search);
     if (!CG && m && SD.lobby) SD.lobby.autoJoin(m[1].toUpperCase());
     var pm = /[?&]party=([A-Za-z]{4})/.exec(location.search);

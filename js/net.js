@@ -85,7 +85,17 @@ window.SD = window.SD || {};
     /* removes the save, the Top 100 entry and the Google login itself */
     deleteAccount: function () {
       var u = FB.auth.currentUser, uid = u.uid;
-      function wipe() { return Promise.all([FB.f.deleteDoc(ref('saves/' + uid)), FB.f.deleteDoc(ref('users/' + uid))]); }
+      function wipe() {
+        var who = ref('nameOf/' + uid);
+        return FB.f.getDoc(who).then(function (s) {
+          var jobs = [FB.f.deleteDoc(ref('saves/' + uid)), FB.f.deleteDoc(ref('users/' + uid)), FB.f.deleteDoc(who)];
+          var held = s.exists() ? st.cleanName(s.data().name || '') : '';
+          if (held) jobs.push(FB.f.deleteDoc(ref('names/' + held)));
+          return Promise.all(jobs.map(function (p) { return p.catch(function () {}); }));
+        }, function () {
+          return Promise.all([FB.f.deleteDoc(ref('saves/' + uid)), FB.f.deleteDoc(ref('users/' + uid))]);
+        });
+      }
       function drop() {
         return u.delete().catch(function (e) {
           if (!/requires-recent-login/.test((e && e.code) || '')) throw e;
@@ -392,32 +402,81 @@ window.SD = window.SD || {};
       });
     },
     /* save now (private structured save; TOP 100 only for Google). Safe to call any time. */
+    /* true when some other account already has this name */
+    nameTaken: function (name) {
+      var key = st.cleanName(name);
+      if (!key || !configured()) return Promise.resolve(false);
+      return load().then(function () { return FB.auth.authStateReady ? FB.auth.authStateReady() : null; }).then(function () {
+        var uid = (FB.auth.currentUser && FB.auth.currentUser.uid) || '';
+        function legacyTaken() {
+          var q = FB.f.query(coll('users'), FB.f.where('name', '==', key), FB.f.limit(5));
+          return FB.f.getDocs(q).then(function (snap) {
+            return snap.docs.some(function (d) { return d.id !== uid; });
+          });
+        }
+        return FB.f.getDoc(ref('names/' + key)).then(function (s) {
+          if (s.exists()) return (s.data().uid || '') !== uid;
+          return legacyTaken();
+        }, legacyTaken);
+      });
+    },
+    onNameRejected: null,
     sync: function () {
       clearTimeout(syncTimer); syncTimer = 0;
       if (!clouded()) return Promise.resolve();
-      var pack = st.packCloud(), lv = pack.level;
       syncState = 'saving';
-      var jobs = [fb.putSave(pack)];
-      if (signedIn()) {
-        jobs.push(fb.saveProfile({ name: pack.name, level: lv, skin: st.get('skins')[0] | 0, tint: (st.get('tints') || [0])[0] | 0, owins: pack.owins, ts: pack.ts }));
-      }
-      return Promise.all(jobs).then(function () { st.quiet('cloudTs', pack.ts); syncState = 'saved'; }, function () {
-        return fb.loadSave().then(function (s) {
-          takeCloud(s);
-          syncState = 'error';
+      function write(p) {
+        var jobs = [fb.putSave(p)];
+        if (signedIn()) {
+          jobs.push(fb.saveProfile({
+            name: p.name, level: p.level,
+            skin: st.get('skins')[0] | 0, tint: (st.get('tints') || [0])[0] | 0,
+            owins: p.owins, ts: p.ts
+          }));
+        }
+        return Promise.all(jobs).then(function () {
+          st.quiet('cloudTs', p.ts);
+          if (st.markSynced) st.markSynced(p.ts);
+          syncState = 'saved';
         }, function () { syncState = 'error'; });
-      });
+      }
+      /* Guests and Google accounts both reserve the name before any cloud write. */
+      function claimAndWrite(tries) {
+        var pack = st.packCloud();
+        return ensureName(pack.name).then(function () { return write(pack); }, function (e) {
+          var code = (e && e.code) || '';
+          if (code !== 'name-taken') {
+            syncState = 'error';
+            return;
+          }
+          var uid = FB.auth.currentUser ? FB.auth.currentUser.uid : '';
+          var owned = lockParts();
+          if (owned.uid === uid && owned.name && owned.name !== st.cleanName(pack.name)) {
+            st.setName(0, owned.name);
+            return write(st.packCloud());
+          }
+          /* Fresh auto name: pick another until free. A typed name shows the error. */
+          if (!(st.get('named') | 0) && (tries | 0) < 8) {
+            st.setName(0, freshName(), { soft: true });
+            return claimAndWrite((tries | 0) + 1);
+          }
+          if (N.onNameRejected) { try { N.onNameRejected(); } catch (err) {} }
+          syncState = 'saved';
+        });
+      }
+      return claimAndWrite(0);
     },
     logout: function () {
+      /* Keep the Google name reserved. A fresh guest session picks its own name. */
       return N.sync().then(fb.logout).then(function () {
-        st.quiet('acct', ''); st.quiet('cloudTs', 0); st.setUid(''); st.reset();
+        st.quiet('acct', ''); st.quiet('cloudTs', 0); st.quiet('nameLock', ''); st.setUid(''); st.reset();
         return FB.a.signInAnonymously(FB.auth).then(function () { remember(FB.auth.currentUser); return N.sync(); });
       });
     },
     deleteAccount: function () {
       clearTimeout(syncTimer); syncTimer = 0;
       return fb.deleteAccount().then(function () {
-        st.quiet('acct', ''); st.quiet('cloudTs', 0); st.setUid(''); st.reset();
+        st.quiet('acct', ''); st.quiet('cloudTs', 0); st.quiet('nameLock', ''); st.setUid(''); st.reset();
         return FB.a.signInAnonymously(FB.auth).then(function () { remember(FB.auth.currentUser); });
       });
     },
@@ -434,6 +493,41 @@ window.SD = window.SD || {};
   };
 
   var syncTimer = 0, syncState = 'saved';
+  var FUNNY = ['BOBA', 'TOFU', 'MANGO', 'NACHO', 'MOCHI', 'PICKLE', 'WAFFLE', 'DONUT', 'TACO', 'JELLY', 'MUFFIN', 'PANCAKE'];
+  function freshName() {
+    return FUNNY[Math.floor(Math.random() * FUNNY.length)] + (10 + Math.floor(Math.random() * 90));
+  }
+  function lockParts() {
+    var raw = String(st.get('nameLock') || ''), i = raw.indexOf('\n');
+    if (i < 0) return { uid: '', name: '' };
+    return { uid: raw.slice(0, i), name: raw.slice(i + 1) };
+  }
+  /* Reserve this name for the current guest or Google account. Document id = name. */
+  function ensureName(name) {
+    var key = st.cleanName(name), u = FB.auth.currentUser;
+    if (!key || !u) return Promise.resolve(false);
+    var held = lockParts();
+    if (held.uid === u.uid && held.name === key) return Promise.resolve(true);
+    var nextRef = ref('names/' + key), whoRef = ref('nameOf/' + u.uid);
+    return FB.f.runTransaction(FB.db, function (tx) {
+      return tx.get(whoRef).then(function (who) {
+        var prev = who.exists() ? st.cleanName(who.data().name || '') : '';
+        var prevRef = prev && prev !== key ? ref('names/' + prev) : null;
+        return Promise.all([tx.get(nextRef), prevRef ? tx.get(prevRef) : Promise.resolve(null)]).then(function (snaps) {
+          var s = snaps[0], old = snaps[1];
+          if (s.exists() && s.data().uid !== u.uid) return 'taken';
+          if (!s.exists()) tx.set(nextRef, { uid: u.uid });
+          if (!who.exists() || prev !== key) tx.set(whoRef, { name: key });
+          if (old && old.exists() && old.data().uid === u.uid) tx.delete(prevRef);
+          return 'ok';
+        });
+      });
+    }).then(function (result) {
+      if (result === 'taken') { var err = new Error('name-taken'); err.code = 'name-taken'; throw err; }
+      st.quiet('nameLock', u.uid + '\n' + key);
+      return true;
+    });
+  }
   function signedIn() { var u = FB && FB.auth.currentUser; return !!(u && !u.isAnonymous && u.uid === st.get('acct')); }
   function clouded() { return !!(FB && FB.auth && FB.auth.currentUser); }
   function remember(u) {
@@ -443,21 +537,27 @@ window.SD = window.SD || {};
   }
   function takeCloud(s) {
     if (!s) return false;
-    if (typeof s.level === 'number' && st.applyCloud(s)) { st.quiet('cloudTs', s.ts | 0); syncState = 'saved'; return true; }
-    if (typeof s.d === 'string' && st.load(s.d)) { st.quiet('cloudTs', s.ts | 0); return true; }
+    if (typeof s.level === 'number' && st.applyCloud(s)) {
+      st.quiet('cloudTs', +s.ts || 0);
+      if (st.markSynced) st.markSynced(+s.ts || 0);
+      syncState = 'saved';
+      return true;
+    }
+    if (typeof s.d === 'string' && st.load(s.d)) { st.quiet('cloudTs', +s.ts || 0); return true; }
     return false;
   }
   /* Cloud wins while online. A localStorage edit is dropped on the next pull.
      First cloud create must be a starter save; a boosted local file is reset. */
   function pull(first) {
     return fb.loadSave(st.uid()).then(function (s) {
-      if (s && (typeof s.level === 'number' || typeof s.d === 'string')) {
+      var localNewer = (st.editedAt && st.editedAt() || 0) > (+(s && s.ts) || 0);
+      if (s && !localNewer && (typeof s.level === 'number' || typeof s.d === 'string')) {
         takeCloud(s);
         if (s.d && typeof s.level !== 'number') return N.sync().then(function () { return true; });
         return true;
       }
-      if (first && st.boosted()) st.reset();
-      return N.sync().then(function () { return false; });
+      if (!s && first && st.boosted() && !(st.editedAt && st.editedAt())) st.reset();
+      return N.sync().then(function () { return !!s; });
     });
   }
   st.onChange(function () {

@@ -11,6 +11,14 @@ service cloud.firestore {
     // Fields: name (string 1-14), level (int 1-200), skin (int 0-40),
     //   tint (int 0-9), owins (int 0-500), ts (int)
     // Public read. Owner Google write. Level/owins change by at most 1.
+    // The name must already be reserved in names/{name} by this account.
+    //
+    // Collection: names (one document per display name)
+    // Document ID: the name itself (A-Z, 0-9, underscore, single spaces)
+    // Fields: uid. Public get. Create claims a free name. Delete releases it.
+    //
+    // Collection: nameOf (which name this account currently holds)
+    // Document ID: Firebase Auth uid. Fields: name. Owner only.
     //
     // Collection: saves (guests + Google)
     // Document ID: Firebase Auth uid
@@ -18,9 +26,10 @@ service cloud.firestore {
     //   olosses, unlocked (list), rooms (list), skins (list of 2),
     //   tints (list of 2), inv (map id->0..9), arena (string), ts (int),
     //   hm/hc/hp (optional history lists, max 80)
-    // Owner-only. Create is a fresh starter save. Updates may raise
-    // level by 1, coins by 80, one extra skin, one extra room, and
-    // each power-up count by 1. Opaque JSON blobs are not allowed.
+    // Owner-only. The name must already be reserved in names/{name}.
+    // Create is a fresh starter save. Updates may raise level by 1,
+    // coins by 80, one extra skin, one extra room, and each power-up
+    // count by 1. Opaque JSON blobs are not allowed.
     //
     // Collection: lobby — authenticated read, owner write
     // Collection: rooms / ice — authenticated matchmaking handshake
@@ -48,6 +57,15 @@ service cloud.firestore {
       return request.resource.data.name is string
         && request.resource.data.name.size() >= 1
         && request.resource.data.name.size() <= 14;
+    }
+    function ownsName() {
+      return exists(/databases/$(database)/documents/names/$(request.resource.data.name))
+        && get(/databases/$(database)/documents/names/$(request.resource.data.name)).data.uid == request.auth.uid;
+    }
+    function validNameKey(nameId) {
+      return nameId.size() >= 1
+        && nameId.size() <= 14
+        && nameId.matches('^[A-Z0-9_]+( [A-Z0-9_]+)*$');
     }
     function validTs() {
       return request.resource.data.ts is int
@@ -103,7 +121,7 @@ service cloud.firestore {
 
     function isValidSave() {
       let d = request.resource.data;
-      return hasOnlyAllowedFields(['name', 'level', 'xp', 'coins', 'pies0', 'pies1', 'wins', 'losses', 'owins', 'olosses', 'unlocked', 'rooms', 'skins', 'tints', 'inv', 'arena', 'ts', 'hm', 'hc', 'hp'])
+      return hasOnlyAllowedFields(['name', 'level', 'xp', 'coins', 'pies0', 'pies1', 'wins', 'losses', 'owins', 'olosses', 'unlocked', 'rooms', 'skins', 'tints', 'inv', 'arena', 'ts', 'hm', 'hc', 'hp', 'named'])
         && hasRequiredFields(['name', 'level', 'xp', 'coins', 'pies0', 'pies1', 'wins', 'losses', 'owins', 'olosses', 'unlocked', 'rooms', 'skins', 'tints', 'inv', 'arena', 'ts'])
         && validName()
         && intIn(d.level, 1, 200)
@@ -111,6 +129,7 @@ service cloud.firestore {
         && (!('hm' in d) || (d.hm is list && d.hm.size() <= 80))
         && (!('hc' in d) || (d.hc is list && d.hc.size() <= 80))
         && (!('hp' in d) || (d.hp is list && d.hp.size() <= 80))
+        && (!('named' in d) || intIn(d.named, 0, 1))
         && intIn(d.coins, 0, 999999)
         && intIn(d.pies0, 0, 99999)
         && intIn(d.pies1, 0, 99999)
@@ -166,11 +185,31 @@ service cloud.firestore {
         && validTs();
     }
 
+    match /names/{nameId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isAuthenticated()
+        && validNameKey(nameId)
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
+    }
+
+    match /nameOf/{uid} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['name'])
+        && request.resource.data.name is string
+        && validNameKey(request.resource.data.name);
+    }
+
     match /users/{uid} {
       allow read: if true;
-      allow create: if isOwner(uid) && isGoogleUser() && isValidUser();
+      allow create: if isOwner(uid) && isGoogleUser() && isValidUser() && ownsName();
       allow update: if isOwner(uid) && isGoogleUser()
         && isValidUser()
+        && ownsName()
         && request.resource.data.level <= resource.data.level + 1
         && request.resource.data.level >= resource.data.level - 1
         && request.resource.data.owins >= resource.data.owins
@@ -180,8 +219,8 @@ service cloud.firestore {
 
     match /saves/{uid} {
       allow read, delete: if isOwner(uid);
-      allow create: if isOwner(uid) && isValidSave() && isStarterSave();
-      allow update: if isOwner(uid) && isValidSave()
+      allow create: if isOwner(uid) && isValidSave() && isStarterSave() && ownsName();
+      allow update: if isOwner(uid) && isValidSave() && ownsName()
         && (migratingFromBlob() || saveDeltaOk());
     }
 

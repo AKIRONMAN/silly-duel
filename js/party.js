@@ -5,6 +5,20 @@
   var art = SD.art, au = SD.audio, st = SD.store;
   var $ = function (s) { return document.querySelector(s); };
   var root, card, ws = null, myId = 0, V = null, tok = 0, curConn = null, inMatch = false, pending = null, watchMid = 0, watching = false, wantReady = {}, queued = false;
+  var chatLog = [], chatOpen = false, chatDraft = '';
+  var CHAT_PRE = [
+    { id: 'hurry', label: 'HURRY!' },
+    { id: 'away', label: 'REMOVE AWAY' },
+    { id: 'start', label: 'START!' },
+    { id: 'doing', label: 'WHAT DOING?' },
+    { id: 'angry', label: 'ANGRY' },
+    { id: 'wait', label: 'WAIT!' },
+    { id: 'lol', label: '😂' },
+    { id: 'wave', label: '👏' },
+    { id: 'ok', label: '👍' },
+    { id: 'cry', label: '😢' },
+    { id: 'fire', label: '🔥' }
+  ];
   var P = SD.party = {};
   SD.tour = P;                                   // the engine calls SD.tour.back() when a bracket match is left
 
@@ -31,7 +45,8 @@
     if (!v) { v = Date.now().toString(36) + Math.random().toString(36).slice(2, 10); try { sessionStorage.setItem(k, v); } catch (e) {} }
     return v;
   })();
-  function profile() { return { t: 'hello', sid: SID, name: st.name(0), level: SD.progress.info().level, skin: (st.get('skins') || [0])[0], tint: (st.get('tints') || [0])[0] | 0 }; }
+  function profile() { return { t: 'hello', sid: SID, name: st.name(0), level: SD.progress.info().level, skin: (st.get('skins') || [0])[0] | 0, tint: (st.get('tints') || [0])[0] | 0 }; }
+  P.hello = function () { send(profile()); };
 
   /* ---------- connection ---------- */
   var lastMsg = 0, retry = null, resuming = false, connecting = null, outbox = [];
@@ -162,8 +177,9 @@
     if (watching && SD.engine.watching && SD.engine.watching()) { watchMid = -1; watching = false; try { SD.engine.home(); } catch (e) {} }
     if (ws && ws.readyState === 1) { send({ t: 'quickCancel' }); send({ t: 'unwatch', mid: watchMid }); send({ t: 'leave' }); }
     hangUp();
-    outbox = []; V = null; queued = false; watching = false;
+    outbox = []; V = null; chatLog = []; chatOpen = false; chatDraft = ''; queued = false; watching = false;
     root.hidden = true; $('#home').hidden = false; if (SD.main && SD.main.refresh) SD.main.refresh();
+    try { if (SD.fresh && SD.fresh.try) SD.fresh.try(); } catch (e) {}
     try { if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('home'); } catch (e) {}
   }
 
@@ -178,8 +194,39 @@
     else if (m.t === 'wait') { if (queued) renderQuickWait(m.n); }
     else if (m.t === 'list') showPublic(m.rooms);
     else if (m.t === 'err') { var e = $('#pErr'); if (e) e.textContent = m.e; else { show('<h2>PARTY</h2><p class="on-msg">' + esc(m.e) + '</p>' + back()); bind('#pBack', menu); } }
+    else if (m.t === 'closed') {
+      V = null; chatLog = []; chatOpen = false; remember('');
+      show('<h2>ROOM CLOSED</h2><div class="on-face">' + art.face(0, 'sad') + '</div><p class="on-msg">' + esc(m.e || 'HOST CLOSED THE ROOM') + '<small>Back home in a moment...</small></p>');
+      setTimeout(function () { leave(); }, 2200);
+    }
+    else if (m.t === 'kicked') {
+      V = null; chatLog = []; chatOpen = false; remember('');
+      show('<h2>REMOVED</h2><div class="on-face">' + art.face(0, 'sad') + '</div><p class="on-msg">' + esc(m.e || 'HOST REMOVED YOU') + '</p><button class="gel danger" id="pOk" type="button"><span>OHH NO</span></button>');
+      bind('#pOk', leave);
+    }
+    else if (m.t === 'hostOffer') {
+      SD.ask({
+        title: 'BECOME HOST?',
+        msg: (m.name || 'HOST') + ' wants you to become the host.',
+        yes: 'OKAY',
+        no: 'NO WAY'
+      }, function () { send({ t: 'acceptHost' }); });
+    }
+    else if (m.t === 'hostNow') {
+      SD.ask({ title: 'YOU ARE HOST', msg: 'You can pick the games and start the room.', yes: 'OKAY', no: 'OKAY' }, function () {});
+    }
+    else if (m.t === 'chat') {
+      if (!V || (m.code && m.code !== V.code) || !m.v) return;
+      pushChat(m.v);
+    }
     else if (m.t === 'room') {
-      V = m.v; remember(V.code);
+      var keepG = V && V.games;
+      var same = V && V.code === m.v.code;
+      V = m.v;
+      if (V.games !== 3 && V.games !== 8 && V.games !== 5 && (keepG === 3 || keepG === 8 || keepG === 5)) V.games = keepG;
+      if (!same) { chatLog = []; chatOpen = false; }
+      if (Array.isArray(V.chats) && V.chats.length) chatLog = V.chats.slice();
+      remember(V.code);
       if (watching && !inMatch) {
         var still = V.matches.filter(function (x) { return x.mid === watchMid && x.live; })[0];
         if (!still) { watchMid = 0; if (SD.engine.watching && SD.engine.watching()) SD.engine.home(); else { watching = false; render(); } }
@@ -187,7 +234,7 @@
       }
       if (!inMatch && !watching) render();
     }
-    else if (m.t === 'left') { V = null; remember(''); }
+    else if (m.t === 'left') { V = null; chatLog = []; chatOpen = false; remember(''); }
     else if (m.t === 'match') {
       pending = m; queued = false; if (m.kind !== 'tour') remember('');
       if (watching) { watching = false; watchMid = -1; }
@@ -231,6 +278,13 @@
     });
   }
   function gamesN() { var n = st.get('games') | 0; return n === 3 || n === 8 ? n : 5; }
+  function roomGames() { var n = V && V.games | 0; return n === 3 || n === 8 ? n : 5; }
+  function gamesPickHtml(cur) {
+    cur = cur === 3 || cur === 8 || cur === 5 ? cur : 5;
+    return '<p class="on-note">HOW MANY GAMES?<small>Best of 3, 5 or 8 when two play. Four or more is a knockout.</small></p><div class="games-pick">' + [3, 5, 8].map(function (n) {
+      return '<button type="button" class="games-n' + (cur === n ? ' on' : '') + '" data-n="' + n + '">' + n + '</button>';
+    }).join('') + '</div>';
+  }
   function paintQuickPick() {
     var cur = gamesN();
     show('<h2>MATCH</h2><p class="on-msg">HOW MANY GAMES?<small>Default is 5. If nobody is waiting for your pick, you may play 5 instead.</small></p>' +
@@ -246,7 +300,7 @@
   }
   function startQuick() {
     busy('INSTANT MATCH', 'CONNECTING...');
-    needWs(function () { queued = true; send({ t: 'quick', games: gamesN() }); renderQuickWait(0); });
+    needWs(function () { send(profile()); queued = true; send({ t: 'quick', games: gamesN() }); renderQuickWait(0); });
   }
   P.quick = function () {
     root = $('#party'); card = $('#partyCard'); open(); paintQuickPick();
@@ -258,8 +312,8 @@
       '<button class="gel alt" id="pJoin" type="button"><span>JOIN WITH A CODE</span></button>' +
       '<button class="gel alt" id="pFind" type="button"><span>JOIN A PUBLIC PARTY</span></button>' +
       '<p class="on-note" id="pNet"></p>' + back());
-    bind('#pMake', function () { busy('FRIENDS ROOM', 'MAKING A ROOM...'); needWs(function () { send({ t: 'create' }); }); });
-    bind('#pPub', function () { busy('FRIENDS ROOM', 'MAKING A ROOM...'); needWs(function () { send({ t: 'create', pub: true }); }); });
+    bind('#pMake', function () { busy('FRIENDS ROOM', 'MAKING A ROOM...'); needWs(function () { send(profile()); send({ t: 'create', games: gamesN() }); }); });
+    bind('#pPub', function () { busy('FRIENDS ROOM', 'MAKING A ROOM...'); needWs(function () { send(profile()); send({ t: 'create', pub: true, games: gamesN() }); }); });
     bind('#pJoin', function () { joinForm(''); });
     bind('#pFind', publicList);
     bind('#pBack', leave);
@@ -276,7 +330,7 @@
       (rows || '<p class="on-msg">NO PUBLIC PARTIES RIGHT NOW<small>Make one, or try again in a moment.</small></p>') +
       '<button class="gel" id="pAgain" type="button"><span>REFRESH</span></button>' + back());
     Array.prototype.forEach.call(card.querySelectorAll('.p-open'), function (b) {
-      b.addEventListener('click', function () { au.sfx.tap(); send({ t: 'join', code: b.dataset.code }); });
+      b.addEventListener('click', function () { au.sfx.tap(); send(profile()); send({ t: 'join', code: b.dataset.code }); });
     });
     bind('#pAgain', publicList); bind('#pBack', menu);
   }
@@ -293,7 +347,7 @@
   };
   function joinForm(pre) {
     show('<h2>JOIN A ROOM</h2><input id="pCode" class="on-in code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" value="' + esc(pre) + '"><p class="on-err" id="pErr"></p><button class="gel" id="pGo" type="button"><span>JOIN</span></button>' + back());
-    var go = function () { var c = ($('#pCode').value || '').toUpperCase().replace(/[^A-Z]/g, ''); if (c.length !== 4) { $('#pErr').textContent = 'TYPE THE 4 LETTERS'; return; } busy('FRIENDS ROOM', 'JOINING ' + esc(c) + '...'); needWs(function () { send({ t: 'join', code: c }); }); };
+    var go = function () { var c = ($('#pCode').value || '').toUpperCase().replace(/[^A-Z]/g, ''); if (c.length !== 4) { $('#pErr').textContent = 'TYPE THE 4 LETTERS'; return; } busy('FRIENDS ROOM', 'JOINING ' + esc(c) + '...'); needWs(function () { send(profile()); send({ t: 'join', code: c }); }); };
     bind('#pGo', go); bind('#pBack', menu);
     if (pre && pre.length === 4) go();
   }
@@ -310,15 +364,174 @@
     if (V.phase === 'done') return renderDone();
     renderTree();
   }
+  function chatRowsHtml() {
+    if (!chatLog.length) return '<p class="on-note">Room chat shows here.</p>';
+    return chatLog.slice(-20).map(function (c) {
+      return '<div class="p-chat-row' + (c.id === myId ? ' me' : '') + '"><b>' + esc(c.name) + '</b><span>' + esc(c.msg) + '</span></div>';
+    }).join('');
+  }
+  function pushChat(row) {
+    if (!row || !row.msg) return;
+    var last = chatLog[chatLog.length - 1];
+    if (last && last.id === row.id && last.msg === row.msg && Math.abs((last.ts || 0) - (row.ts || 0)) < 800) return;
+    chatLog.push(row); if (chatLog.length > 40) chatLog = chatLog.slice(-40);
+    paintChat();
+  }
+  function sendChat(payload, shown) {
+    if (shown) pushChat({ id: myId, name: st.name(0), msg: shown, ts: Date.now() });
+    send(payload);
+  }
+  function chatPopupHtml() {
+    var presets = CHAT_PRE.map(function (p) {
+      return '<button type="button" class="p-chat-pre" data-pre="' + p.id + '" data-label="' + esc(p.label) + '">' + p.label + '</button>';
+    }).join('');
+    return '<div class="p-chat-pop" id="pChatPop"' + (chatOpen ? '' : ' hidden') + '>' +
+      '<div class="p-chat-card">' +
+      '<div class="p-chat-head"><b>CHAT</b><button type="button" class="icon-btn" id="pChatClose" aria-label="Close">' + art.icon('close', 22) + '</button></div>' +
+      '<p class="on-note">Tap a quick line, or type up to 15 letters.</p>' +
+      '<div class="p-chat-presets">' + presets + '</div>' +
+      '<div class="p-chat-type"><input id="pChatIn" class="on-in" maxlength="15" autocomplete="off" spellcheck="false" placeholder="15 LETTERS" value="' + esc(chatDraft) + '"><button type="button" class="gel" id="pChatSend"><span>SEND</span></button></div>' +
+      '</div></div>';
+  }
+  function paintChat() {
+    if (!card) return;
+    var feed = card.querySelector('#pChatFeed');
+    if (feed) {
+      feed.innerHTML = chatRowsHtml();
+      feed.scrollTop = feed.scrollHeight;
+    }
+  }
+  function bindChat() {
+    bind('#pChatBtn', function () {
+      chatOpen = true;
+      var pop = card.querySelector('#pChatPop');
+      if (pop) pop.hidden = false;
+    });
+    bind('#pChatClose', function () {
+      chatOpen = false;
+      var pop = card.querySelector('#pChatPop');
+      if (pop) pop.hidden = true;
+    });
+    var pop = card.querySelector('#pChatPop');
+    if (pop) {
+      pop.addEventListener('click', function (ev) {
+        if (ev.target === pop) { chatOpen = false; pop.hidden = true; }
+      });
+    }
+    Array.prototype.forEach.call(card.querySelectorAll('.p-chat-pre'), function (b) {
+      b.addEventListener('click', function () {
+        au.sfx.tap();
+        var pre = b.dataset.pre, label = b.dataset.label || b.textContent;
+        sendChat({ t: 'chat', pre: pre }, label);
+        chatOpen = false;
+        if (pop) pop.hidden = true;
+      });
+    });
+    var inp = card.querySelector('#pChatIn');
+    if (inp) {
+      inp.addEventListener('input', function () {
+        chatDraft = String(inp.value || '').slice(0, 15);
+        inp.value = chatDraft;
+      });
+    }
+    bind('#pChatSend', function () {
+      var raw = String((card.querySelector('#pChatIn') && card.querySelector('#pChatIn').value) || chatDraft || '').trim().slice(0, 15);
+      if (!raw) return;
+      sendChat({ t: 'chat', msg: raw }, raw);
+      chatDraft = '';
+      var el = card.querySelector('#pChatIn'); if (el) el.value = '';
+      chatOpen = false;
+      if (pop) pop.hidden = true;
+    });
+  }
   function renderLobby() {
     var n = V.players.length, isHost = V.host === myId, okN = n >= 2 && n <= 10 && n % 2 === 0;
-    var list = V.players.map(function (p) { return '<div class="tl-p' + (p.away ? ' away' : '') + '">' + face(p) + '<b>' + esc(p.name) + (p.id === V.host ? ' *' : '') + '</b>' + (p.away ? '<small>AWAY</small>' : '') + '</div>'; }).join('');
-    show('<h2>ROOM' + (V.pub ? ' · PUBLIC' : '') + '</h2><div class="t-code">' + esc(V.code) + '</div><p class="on-note">' + (V.pub ? 'This room is public. Anyone can find it under JOIN A PUBLIC PARTY.' : 'Friends: tap ROOM, JOIN WITH A CODE, and type this. Or send the invite link.') + '</p>' +
-      '<div class="tl-list">' + list + '</div><p class="on-msg tl"><small>' + n + ' / 10 PLAYERS' + (okN ? '' : n < 2 ? ' · NEED ONE MORE' : ' · NEED AN EVEN NUMBER') + '</small></p><p class="on-err" id="pErr"></p>' +
-      (isHost ? '<button class="gel" id="pStart" type="button"' + (okN ? '' : ' disabled') + '><span>START' + (n >= 2 ? ' (' + n + ')' : '') + '</span></button>' : '<p class="on-msg">WAITING FOR THE HOST TO START...</p>') +
-      '<button class="gel alt" id="pInv" type="button"><span>SEND INVITE</span></button>' + back('LEAVE'));
-    bind('#pStart', function () { send({ t: 'start' }); }); bind('#pInv', invite);
-    bind('#pBack', function () { confirmLeave(leave, 'LEAVE THE ROOM?', 'Your friends will see you leave.'); });
+    var g = roomGames();
+    var list = V.players.map(function (p) {
+      var acts = '';
+      if (isHost && p.id !== myId) {
+        acts = '<span class="tl-acts">' +
+          '<button type="button" class="tl-act host" data-id="' + p.id + '">HOST</button>' +
+          '<button type="button" class="tl-act kick" data-id="' + p.id + '">KICK</button></span>';
+      }
+      return '<div class="tl-p' + (p.away ? ' away' : '') + (p.id === V.host ? ' host' : '') + '">' + face(p) +
+        '<b>' + esc(p.name) + (p.id === V.host ? ' *' : '') + '</b>' +
+        (p.away ? '<small>AWAY</small>' : p.id === V.host ? '<small>HOST</small>' : '<small>LV ' + (p.level | 0) + '</small>') +
+        acts + '</div>';
+    }).join('');
+    var toolsRow = '<div class="p-tools">' +
+      '<button type="button" class="gel alt p-chat-ico" id="pChatBtn" aria-label="Chat">' + art.icon('chat', 28) + '</button>' +
+      (isHost
+        ? '<div class="games-pick slim">' + [3, 5, 8].map(function (n2) {
+          return '<button type="button" class="games-n' + (g === n2 ? ' on' : '') + '" data-n="' + n2 + '">' + n2 + '</button>';
+        }).join('') + '</div>'
+        : '<p class="p-games-ro">BEST OF ' + g + '</p>') +
+      '</div>';
+    var foot = '<div class="p-foot">' +
+      (isHost
+        ? '<button class="gel" id="pStart" type="button"' + (okN ? '' : ' disabled') + '><span>START' + (n >= 2 ? ' (' + n + ')' : '') + '</span></button>'
+        : '<p class="on-msg p-wait">WAITING FOR HOST...</p>') +
+      '<button class="gel alt" id="pInv" type="button">' + art.icon('invite', 26) + '<span>INVITE</span></button>' +
+      '</div>';
+    show('<div class="p-lobby">' +
+      '<div class="p-lobby-top">' +
+      '<h2>ROOM' + (V.pub ? ' · PUBLIC' : '') + '</h2><div class="t-code">' + esc(V.code) + '</div>' +
+      '<p class="on-note">' + (V.pub ? 'Public room. Anyone can find it.' : 'Share the code or invite link.') + '</p>' +
+      '<div class="tl-list">' + list + '</div>' +
+      '<p class="on-msg tl"><small>' + n + ' / 10' + (okN ? '' : n < 2 ? ' · NEED ONE MORE' : ' · NEED EVEN NUMBER') + ' · BEST OF ' + g + '</small></p>' +
+      '<div class="p-chat-feed" id="pChatFeed">' + chatRowsHtml() + '</div>' +
+      '<p class="on-err" id="pErr"></p>' +
+      '</div>' +
+      '<div class="p-lobby-bot">' + toolsRow + foot + '</div>' +
+      '</div>' + chatPopupHtml() + back('LEAVE'));
+    if (isHost) {
+      Array.prototype.forEach.call(card.querySelectorAll('.games-n'), function (b) {
+        b.addEventListener('click', function () {
+          var n2 = +b.dataset.n; n2 = (n2 === 3 || n2 === 8) ? n2 : 5;
+          V.games = n2; au.sfx.tap();
+          Array.prototype.forEach.call(card.querySelectorAll('.games-n'), function (x) { x.classList.toggle('on', +x.dataset.n === n2); });
+          send({ t: 'setGames', games: n2 });
+        });
+      });
+      Array.prototype.forEach.call(card.querySelectorAll('.tl-act.host'), function (b) {
+        b.addEventListener('click', function (ev) {
+          ev.preventDefault(); ev.stopPropagation(); au.sfx.tap();
+          var id = +b.dataset.id, who = '';
+          V.players.forEach(function (p) { if (p.id === id) who = p.name; });
+          SD.ask({
+            title: 'MAKE HOST?',
+            msg: 'Are you sure you want ' + (who || 'this player') + ' to be host?',
+            yes: 'SURE',
+            no: 'KEEP WAITING'
+          }, function () { send({ t: 'offerHost', id: id }); });
+        });
+      });
+      Array.prototype.forEach.call(card.querySelectorAll('.tl-act.kick'), function (b) {
+        b.addEventListener('click', function (ev) {
+          ev.preventDefault(); ev.stopPropagation(); au.sfx.tap();
+          var id = +b.dataset.id, who = '';
+          V.players.forEach(function (p) { if (p.id === id) who = p.name; });
+          SD.ask({ title: 'REMOVE ' + (who || 'PLAYER') + '?', msg: 'They will leave this room.', yes: 'REMOVE', no: 'KEEP THEM' }, function () { send({ t: 'kick', id: id }); });
+        });
+      });
+    }
+    bindChat();
+    bind('#pStart', function () { send(profile()); send({ t: 'start' }); });
+    bind('#pInv', invite);
+    bind('#pBack', function () {
+      if (isHost) {
+        SD.ask({
+          title: 'LEAVE THE ROOM?',
+          msg: 'Leave keeps the room open. Close the room sends everyone home.',
+          yes: 'LEAVE',
+          no: 'KEEP WAITING',
+          danger: 'CLOSE THE ROOM',
+          onDanger: function () { send({ t: 'closeRoom' }); leave(); }
+        }, leave);
+      } else {
+        confirmLeave(leave, 'LEAVE THE ROOM?', 'Your friends will see you leave.');
+      }
+    });
   }
   function invite() {
     var url = location.href.split('#')[0].split('?')[0] + '?party=' + V.code, text = 'Join my Silly Duel room! Code: ' + V.code;
@@ -358,7 +571,12 @@
       return;
     }
     var watchHint = live.length ? '<p class="on-note">Tap a LIVE match to watch it in the full arena.</p>' : '';
-    show('<h2>' + label + '</h2><p class="on-msg tl">' + line + '<small>' + alive + ' PLAYERS LEFT · FIRST TO 2 WINS</small></p>' + watchHint + '<div class="tms">' + V.matches.map(function (m) { return node(m, by); }).join('') + '</div>' + ready + back('LEAVE'));
+    show('<h2>' + label + '</h2><p class="on-msg tl">' + line + '<small>' + alive + ' PLAYERS LEFT · FIRST TO 2 WINS</small></p>' + watchHint + '<div class="tms">' + V.matches.map(function (m) { return node(m, by); }).join('') + '</div>' +
+      '<div class="p-chat-feed" id="pChatFeed">' + chatRowsHtml() + '</div>' +
+      ready +
+      '<div class="p-tools"><button type="button" class="gel alt p-chat-ico" id="pChatBtn" aria-label="Chat">' + art.icon('chat', 28) + '</button></div>' +
+      chatPopupHtml() + back('LEAVE'));
+    bindChat();
     bind('#pReady', function () { send(profile()); send({ t: 'ready', mid: mine.mid }); });
     bind('#pBack', function () { confirmLeave(leave, 'LEAVE THE PARTY?', 'You will drop out of this tournament.'); });
     Array.prototype.forEach.call(card.querySelectorAll('.tm.live'), function (el) {
@@ -432,5 +650,6 @@
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
   P.active = function () { return !!curConn; };
+  P.busy = function () { return !!(inMatch || queued || watching || pending || V || (root && !root.hidden)); };
   SD.partyDbg = function (v, id) { if (v) { V = v; myId = id; root = $('#party'); card = $('#partyCard'); root.hidden = false; render(); } return V; };
 })();
