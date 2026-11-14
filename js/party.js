@@ -171,7 +171,12 @@
     show('<h2>NO SERVER FOUND</h2><div class="on-face">' + art.face(0, 'sad') + '</div><p class="on-msg">COULD NOT REACH THE GAME SERVER<small>Online play needs the Silly Duel server. See SERVER-GUIDE.txt (local wifi or internet).</small></p>' + back('OK'));
     bind('#pBack', leave);
   }
-  function open() { var tap = document.getElementById('tapStart'); if (tap) tap.hidden = true; root.hidden = false; $('#home').hidden = true; tok++; V = null; try { if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('party'); } catch (e) {} }
+  function open() {
+    var tap = document.getElementById('tapStart'); if (tap) tap.hidden = true;
+    try { var rb = document.getElementById('rescueBtn'); if (rb) rb.remove(); } catch (e) {}
+    root.hidden = false; $('#home').hidden = true; tok++; V = null;
+    try { if (SD.ads && SD.ads.onScreen) SD.ads.onScreen('party'); } catch (e) {}
+  }
   function leave() {
     tok++; clearTimeout(retry); retry = null; resuming = false; remember('');
     if (watching && SD.engine.watching && SD.engine.watching()) { watchMid = -1; watching = false; try { SD.engine.home(); } catch (e) {} }
@@ -358,8 +363,11 @@
   }
   function chatRowsHtml() {
     if (!chatLog.length) return '<p class="on-note">Room chat shows here.</p>';
-    return chatLog.slice(-20).map(function (c) {
-      return '<div class="p-chat-row' + (c.id === myId ? ' me' : '') + '"><b>' + esc(c.name) + '</b><span>' + esc(c.msg) + '</span></div>';
+    var now = Date.now();
+    return chatLog.slice(-20).map(function (c, i, arr) {
+      var fresh = (now - (c.ts || 0)) < 3200;
+      var last = i === arr.length - 1;
+      return '<div class="p-chat-bubble' + (c.id === myId ? ' me' : '') + (fresh || last ? ' flash' : '') + '"><b>' + esc(c.name) + '</b><span>' + esc(c.msg) + '</span></div>';
     }).join('');
   }
   function pushChat(row) {
@@ -369,8 +377,10 @@
       if (chatLog[i].id === row.id && chatLog[i].msg === row.msg) { hit = true; break; }
     }
     if (hit) return;
+    if (!row.ts) row.ts = Date.now();
     chatLog.push(row); if (chatLog.length > 40) chatLog = chatLog.slice(-40);
     paintChat();
+    setTimeout(paintChat, 3200);
   }
   function sendChat(payload) {
     send(payload);
@@ -389,6 +399,7 @@
   }
   function paintChat() {
     if (!card) return;
+    try { var rb = document.getElementById('rescueBtn'); if (rb) rb.remove(); } catch (e) {}
     var feed = card.querySelector('#pChatFeed');
     if (feed) {
       feed.innerHTML = chatRowsHtml();
@@ -455,13 +466,16 @@
         return '<button type="button" class="games-n' + (g === n2 ? ' on' : '') + '" data-n="' + n2 + '">' + n2 + '</button>';
       }).join('') + '</div>'
       : '';
-    var startRow = '<div class="p-foot">' +
+    var startRow = '<div class="p-foot p-start-row">' +
       (isHost
         ? '<button class="gel" id="pStart" type="button"' + (okN ? '' : ' disabled') + '><span>START' + (n >= 2 ? ' (' + n + ')' : '') + '</span></button>'
         : '<p class="on-msg p-wait">WAITING FOR HOST...</p>') +
+      '</div>';
+    var chatRow = '<div class="p-foot p-chat-inv">' +
+      '<button type="button" class="gel alt" id="pChatBtn">' + art.icon('chat', 26) + '<span>CHAT</span></button>' +
       '<button class="gel alt" id="pInv" type="button">' + art.icon('invite', 26) + '<span>INVITE</span></button>' +
       '</div>';
-    var chatRow = '<div class="p-foot p-chat-row-btn"><button type="button" class="gel alt" id="pChatBtn">' + art.icon('chat', 26) + '<span>CHAT</span></button></div>';
+    try { var rb0 = document.getElementById('rescueBtn'); if (rb0) rb0.remove(); } catch (e) {}
     show('<div class="p-lobby">' +
       '<div class="p-lobby-top">' +
       '<h2>ROOM' + (V.pub ? ' · PUBLIC' : '') + '</h2><div class="t-code">' + esc(V.code) + '</div>' +

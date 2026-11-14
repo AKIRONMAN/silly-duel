@@ -71,18 +71,39 @@ button.tl-p.tap:active { transform: scale(.96); }
 .p-foot { display: flex; gap: 8px; width: 100%; }
 .p-foot .gel { flex: 1; min-height: 52px; font-size: 16px; }
 .p-foot .gel .ico { width: 24px; height: 24px; }
-.p-chat-row-btn .gel { width: 100%; }
+.p-start-row .gel { width: 100%; }
 .p-chat-feed {
-  width: 100%; min-height: 48px; max-height: 88px; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 3px; align-items: stretch;
+  width: 100%; min-height: 52px; max-height: 100px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 6px; align-items: stretch;
   background: transparent; border: 0; border-radius: 0; padding: 2px 0;
   scrollbar-width: none; -ms-overflow-style: none;
 }
 .p-chat-feed::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .p-chat-feed .on-note { margin: 0; opacity: .55; }
-.p-chat-row { font-family: var(--font-p); font-size: 12px; line-height: 1.35; text-align: left; }
-.p-chat-row b { margin-right: 6px; opacity: .75; }
-.p-chat-row.me b { color: var(--grape); }
+.p-chat-bubble {
+  font-family: var(--font-p); font-size: 12px; line-height: 1.35; text-align: left;
+  background: #fff; border: 3px solid var(--ink); border-radius: 14px; padding: 7px 10px;
+  box-shadow: 0 3px 0 var(--ink); transition: background .35s ease, box-shadow .35s ease;
+}
+.p-chat-bubble b { margin-right: 6px; color: var(--grape); }
+.p-chat-bubble.me { background: #fff8d6; }
+.p-chat-bubble.flash {
+  background: var(--lemon);
+  box-shadow: 0 3px 0 var(--ink), 0 0 0 3px rgba(255, 210, 63, .55);
+  animation: pChatFlash 3s ease forwards;
+}
+@keyframes pChatFlash {
+  0%, 70% { background: var(--lemon); }
+  100% { background: #fff; box-shadow: 0 3px 0 var(--ink); }
+}
+.p-chat-bubble.me.flash {
+  animation: pChatFlashMe 3s ease forwards;
+}
+@keyframes pChatFlashMe {
+  0%, 70% { background: var(--lemon); }
+  100% { background: #fff8d6; box-shadow: 0 3px 0 var(--ink); }
+}
+#party ~ #rescueBtn, #app:has(#party:not([hidden])) #rescueBtn { display: none !important; }
 .p-chat-pop {
   position: fixed; inset: 0; z-index: 70; display: flex; align-items: flex-end; justify-content: center;
   padding: calc(var(--st) + 12px) 12px calc(var(--sb) + 12px); background: rgba(42, 22, 80, .55);

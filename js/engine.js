@@ -12,7 +12,170 @@ SD.games = SD.games || [];
   var keyHeld = {};
 
   var ROASTS = ['Pie suits you.', 'Dessert is served.', 'Wallet out!', 'So tasty. So sad.', 'Nice try!', 'Splat life.', 'Cream of the crop.', 'Too slow, pie face.'];
+  var EMOTE_ICO = '<svg viewBox="0 0 64 64" class="ico" aria-hidden="true"><rect x="10" y="8" width="44" height="34" rx="12" fill="#fff" stroke="#2a1650" stroke-width="4"/><path d="M24 42 L18 54 L34 42" fill="#fff" stroke="#2a1650" stroke-width="4" stroke-linejoin="round"/><circle cx="26" cy="24" r="3.5" fill="#2a1650"/><circle cx="40" cy="24" r="3.5" fill="#2a1650"/><path d="M24 32c4 6 14 6 18 0" fill="none" stroke="#2a1650" stroke-width="3.5" stroke-linecap="round"/></svg>';
+  var EMOTES = [
+    { id: 'haha', mood: 'laugh', sfx: 'emLaugh', act: 'laugh', gif: '<svg class="em-gif" viewBox="0 0 64 64" aria-hidden="true"><g class="em-bob"><circle cx="32" cy="32" r="24" fill="#ffd23f" stroke="#2a1650" stroke-width="3.4"/><path d="M18 28c4-7 10-7 14 0M32 28c4-7 10-7 14 0" fill="none" stroke="#2a1650" stroke-width="3.1" stroke-linecap="round"/><ellipse class="em-mouth" cx="32" cy="42" rx="10" ry="7" fill="#2a1650"/><ellipse cx="32" cy="45" rx="5.5" ry="3" fill="#ff6f8e"/><ellipse class="em-tear" cx="14" cy="38" rx="3.4" ry="5" fill="#7ec8ff" stroke="#2a1650" stroke-width="1.8"/><ellipse class="em-tear late" cx="50" cy="38" rx="3.4" ry="5" fill="#7ec8ff" stroke="#2a1650" stroke-width="1.8"/></g></svg>' },
+    { id: 'yes', mood: 'cheer', sfx: 'emYes', act: 'cheer', gif: '<svg class="em-gif" viewBox="0 0 64 64" aria-hidden="true"><g class="em-pulse"><circle cx="32" cy="32" r="24" fill="#ffd23f" stroke="#2a1650" stroke-width="3.4"/><path class="em-heart" d="M19 29c0-5 6-7.5 10-3.2c4-4.3 10-1.8 10 3.2c0 6.5-10 12-10 12S19 35.5 19 29Z" fill="#ff4d6d" stroke="#2a1650" stroke-width="2.2"/><path class="em-heart late" d="M35 29c0-5 6-7.5 10-3.2c4-4.3 10-1.8 10 3.2c0 6.5-10 12-10 12S35 35.5 35 29Z" fill="#ff4d6d" stroke="#2a1650" stroke-width="2.2"/><path d="M22 46c6 7 14 7 20 0" fill="none" stroke="#2a1650" stroke-width="3.1" stroke-linecap="round"/></g></svg>' },
+    { id: 'wow', mood: 'worry', sfx: 'emWow', act: 'wow', gif: '<svg class="em-gif" viewBox="0 0 64 64" aria-hidden="true"><g class="em-pulse"><circle cx="32" cy="32" r="24" fill="#ffd23f" stroke="#2a1650" stroke-width="3.4"/><circle cx="22" cy="28" r="7.2" fill="#fff" stroke="#2a1650" stroke-width="2.6"/><circle cx="42" cy="28" r="7.2" fill="#fff" stroke="#2a1650" stroke-width="2.6"/><circle class="em-pupil" cx="22" cy="29" r="3" fill="#2a1650"/><circle class="em-pupil" cx="42" cy="29" r="3" fill="#2a1650"/><ellipse class="em-mouth" cx="32" cy="45" rx="6.2" ry="8" fill="#2a1650"/></g></svg>' },
+    { id: 'fire', mood: '', sfx: 'emFire', act: 'cheer', gif: '<svg class="em-gif" viewBox="0 0 64 64" aria-hidden="true"><g class="em-flick"><path d="M32 10c7 11-3 15 2 24c-12-3-16 7-16 16c0 11 11 18 20 18s20-7 20-18c0-16-14-25-26-40Z" fill="#ff7a1a" stroke="#2a1650" stroke-width="3.1"/><path class="em-core" d="M32 30c4.5 7-1 9 1.8 14c-7-2-10.5 3.5-10.5 10c0 6 6 10.5 10.7 10.5s10.7-4.5 10.7-10.5c0-10-8-15-12.7-24Z" fill="#ffe27a"/></g></svg>' },
+    { id: 'cry', mood: 'sad', sfx: 'emSad', act: 'sad', gif: '<svg class="em-gif" viewBox="0 0 64 64" aria-hidden="true"><g class="em-droop"><circle cx="32" cy="32" r="24" fill="#ffd23f" stroke="#2a1650" stroke-width="3.4"/><ellipse cx="22" cy="30" rx="3.6" ry="5" fill="#2a1650"/><ellipse cx="42" cy="30" rx="3.6" ry="5" fill="#2a1650"/><path d="M20 24c4 1 8 2 10 5M44 24c-4 1-8 2-10 5" fill="none" stroke="#2a1650" stroke-width="2.8" stroke-linecap="round"/><path d="M22 46c6-7 14-7 20 0" fill="none" stroke="#2a1650" stroke-width="3.2" stroke-linecap="round"/><ellipse class="em-drop" cx="18" cy="40" rx="3" ry="4.8" fill="#7ec8ff" stroke="#2a1650" stroke-width="1.7"/><ellipse class="em-drop late" cx="46" cy="41" rx="3" ry="4.8" fill="#7ec8ff" stroke="#2a1650" stroke-width="1.7"/></g></svg>' },
+    { id: 'mad', mood: 'worry', sfx: 'emAngry', act: 'mad', gif: '<svg class="em-gif" viewBox="0 0 64 64" aria-hidden="true"><g class="em-mad"><circle cx="32" cy="32" r="24" fill="#ffd23f" stroke="#2a1650" stroke-width="3.4"/><ellipse cx="17" cy="40" rx="7" ry="5" fill="#ff4d6d"/><ellipse cx="47" cy="40" rx="7" ry="5" fill="#ff4d6d"/><path d="M13 30 L30 19" fill="none" stroke="#2a1650" stroke-width="4.4" stroke-linecap="round"/><path d="M51 30 L34 19" fill="none" stroke="#2a1650" stroke-width="4.4" stroke-linecap="round"/><ellipse cx="22" cy="34" rx="4" ry="5" fill="#2a1650"/><ellipse cx="42" cy="34" rx="4" ry="5" fill="#2a1650"/><ellipse cx="32" cy="48" rx="8" ry="5" fill="#2a1650"/></g></svg>' }
+  ];
   function rnd(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function emoteOf(id) {
+    for (var i = 0; i < EMOTES.length; i++) if (EMOTES[i].id === id) return EMOTES[i];
+    return null;
+  }
+  function canSendEmote(i) {
+    if (!S || S.spec || S.mode === 'boss') return false;
+    if (S.online || (S.bots && S.bots.length)) return i === S.me;
+    return S.bots.indexOf(i) < 0;
+  }
+  function emoteSlots() {
+    if (!S || S.spec || S.mode === 'boss') return [];
+    if (S.online || (S.bots && S.bots.length)) return [S.me];
+    return S.all.filter(function (i) { return S.bots.indexOf(i) < 0; });
+  }
+  function closeEmoteWheel() {
+    var w = document.getElementById('emWheel');
+    if (w && w.parentNode) w.parentNode.removeChild(w);
+  }
+  function closeEmoteIfOut(e) {
+    var t = e && e.target;
+    if (!t || !t.closest) { closeEmoteWheel(); return; }
+    if (t.closest('#emWheel') || t.closest('.pad-emote')) return;
+    closeEmoteWheel();
+  }
+  function padFromHost(host) {
+    return host && host.closest ? host.closest('.pad') : null;
+  }
+  function paintBubble(host, em) {
+    if (!host || !em) return;
+    var pad = padFromHost(host);
+    if (pad) pad.classList.add('em-on');
+    var b = host.querySelector('.em-bub');
+    if (!b) { b = document.createElement('span'); b.className = 'em-bub'; host.appendChild(b); }
+    b.className = 'em-bub gif em-' + em.id;
+    b.innerHTML = em.gif;
+    b.hidden = false;
+    b.classList.remove('pop');
+    void b.offsetWidth;
+    b.classList.add('pop');
+  }
+  function refreshEmoteBubbles() {
+    if (!S || !S.emLast) return;
+    var now = Date.now();
+    for (var k in S.emLast) {
+      if (!Object.prototype.hasOwnProperty.call(S.emLast, k)) continue;
+      if ((S.emUntil && S.emUntil[k] || 0) < now) continue;
+      var em = emoteOf(S.emLast[k]); if (!em) continue;
+      var hosts = document.querySelectorAll('[data-em-slot="' + k + '"]');
+      for (var i = 0; i < hosts.length; i++) paintBubble(hosts[i], em);
+    }
+  }
+  function playEmoteFace(slot, em) {
+    var p = pads[slot];
+    if (!p || !em) return;
+    var wrap = p.faceEl && p.faceEl.parentNode;
+    if (wrap) {
+      wrap.classList.remove('em-act-laugh', 'em-act-sad', 'em-act-cheer', 'em-act-wow', 'em-act-mad');
+      wrap.classList.add('em-act-' + (em.act || 'cheer'));
+    }
+    if (em.mood) {
+      p.emPrev = p.mood || 'idle';
+      p.mood = '';
+      setFace(slot, em.mood);
+    }
+    clearTimeout(p.emFaceT);
+    p.emFaceT = setTimeout(function () {
+      if (!pads[slot]) return;
+      var w = pads[slot].faceEl && pads[slot].faceEl.parentNode;
+      if (w) w.classList.remove('em-act-laugh', 'em-act-sad', 'em-act-cheer', 'em-act-wow', 'em-act-mad');
+      if (em.mood && pads[slot].mood === em.mood) {
+        pads[slot].mood = '';
+        var back = pads[slot].emPrev || 'idle';
+        var crown = /c$/.test(back);
+        setFace(slot, back.replace(/c$/, '') || 'idle', crown ? { crown: true } : undefined);
+      }
+    }, 1800);
+  }
+  function showEmote(slot, id) {
+    var em = emoteOf(id);
+    if (!em || !S) return;
+    if (!S.emLast) S.emLast = {};
+    if (!S.emUntil) S.emUntil = {};
+    S.emLast[slot] = id;
+    S.emUntil[slot] = Date.now() + 2800;
+    var hosts = document.querySelectorAll('[data-em-slot="' + slot + '"]');
+    for (var i = 0; i < hosts.length; i++) paintBubble(hosts[i], em);
+    playEmoteFace(slot, em);
+    setTimeout(function () {
+      if (!S || !S.emUntil || S.emUntil[slot] > Date.now()) return;
+      var hs = document.querySelectorAll('[data-em-slot="' + slot + '"]');
+      for (var j = 0; j < hs.length; j++) {
+        var b = hs[j].querySelector('.em-bub');
+        if (b) b.hidden = true;
+        var pad = padFromHost(hs[j]);
+        if (pad) pad.classList.remove('em-on');
+      }
+    }, 2900);
+    try {
+      if (em.sfx && au.sfx[em.sfx]) au.sfx[em.sfx]();
+      else au.sfx.tap();
+    } catch (e) {}
+  }
+  function fireEmote(slot, id, fromNet) {
+    if (!emoteOf(id) || !S) return;
+    if (!fromNet) {
+      if (!canSendEmote(slot)) return;
+      var now = Date.now();
+      if (!S.emCool) S.emCool = {};
+      if ((S.emCool[slot] || 0) > now) return;
+      S.emCool[slot] = now + 1400;
+      if (S.online && S.online.peer) { try { S.online.peer.send({ t: 'em', e: id }); } catch (e) {} }
+    }
+    closeEmoteWheel();
+    showEmote(slot, id);
+  }
+  function openEmoteWheel(slot, btn) {
+    if (!canSendEmote(slot)) return;
+    var cur = document.getElementById('emWheel');
+    if (cur && cur.getAttribute('data-slot') === String(slot)) { closeEmoteWheel(); return; }
+    closeEmoteWheel();
+    var box = document.createElement('div');
+    box.id = 'emWheel';
+    box.className = 'em-wheel';
+    box.setAttribute('data-slot', slot);
+    EMOTES.forEach(function (em) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'em-pick';
+      b.setAttribute('aria-label', em.id);
+      b.innerHTML = em.gif;
+      b.addEventListener('pointerdown', function (e) { e.stopPropagation(); e.preventDefault(); fireEmote(slot, em.id, false); });
+      b.addEventListener('click', function (e) { e.stopPropagation(); });
+      box.appendChild(b);
+    });
+    box.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    document.body.appendChild(box);
+    var r = btn.getBoundingClientRect();
+    var w = box.offsetWidth || 340, h = box.offsetHeight || 56;
+    var left = Math.round(Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8)));
+    var top = r.top > h + 20 ? Math.round(r.top - h - 8) : Math.round(r.bottom + 8);
+    box.style.left = left + 'px';
+    box.style.top = top + 'px';
+  }
+  function bindEmoteBtn(btn, slot) {
+    if (!btn) return;
+    btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); e.preventDefault(); openEmoteWheel(slot, btn); });
+    btn.addEventListener('click', function (e) { e.stopPropagation(); });
+  }
+  function mountCereEmotes() {
+    var row = document.getElementById('cereEmRow');
+    if (!row) return;
+    row.hidden = true;
+    row.innerHTML = '';
+  }
   function afterAd(fn) {
     var done = false;
     function go() { if (done) return; done = true; try { fn(); } catch (e) {} }
@@ -125,12 +288,13 @@ SD.games = SD.games || [];
   function updatePts() {
     if (S && S.online && S.online.onScore) { try { S.online.onScore(S.totals.slice(), S.game ? S.game.title : ''); } catch (er) {} }
     pads.forEach(function (p, i) {
-      p.ptsEl.innerHTML = S && S.series ? art.icon('star', 16) + '<b>' + (S.totals[i] | 0) + '</b><small>PTS</small>' : '';
+      p.ptsEl.innerHTML = S && S.series ? art.icon('star', 22) + '<b>' + (S.totals[i] | 0) + '</b><small>PTS</small>' : '';
     });
   }
 
   /* ---------- pads ---------- */
   function buildPads(n) {
+    closeEmoteWheel();
     padsEl.innerHTML = ''; pads = []; keyHeld = {};
     arenaEl.dataset.count = n;
     for (var i = 0; i < n; i++) (function (i) {
@@ -142,15 +306,19 @@ SD.games = SD.games || [];
         el.style.setProperty('--op', (i === mine) === (cv === 'bottom') ? 1 : 0); el.style.setProperty('--ol', (i === mine) === (ch === 'right') ? 1 : 0);
       }
       el.style.setProperty('--pc', c.pad); el.style.setProperty('--pf', c.fill); el.style.setProperty('--pd', c.deep);
-      el.innerHTML = '<div class="pad-top"><span class="pad-face"></span><span class="pad-name">' + padLabel(i) + '</span><span class="pad-pts"></span>' + (S && S.bots.indexOf(i) >= 0 ? ((S.sim || SD.BUILD === 'cg') ? '' : '<kbd class="bot">BOT</kbd>') : S && (S.mode === 'boss' || S.nolocal.indexOf(i) >= 0) ? '' : (padKey(i) ? '<kbd>' + (padKey(i) === 'SPACE' ? 'SPC' : padKey(i)) + '</kbd>' : '')) + (i === (mine >= 0 ? mine : 0) ? '<button type="button" class="pad-exit" aria-label="Exit">EXIT</button>' : '') + '</div><div class="pad-stage"></div><div class="pad-dock"></div><div class="pad-badge"></div>';
+      var canEm = canSendEmote(i);
+      var showExit = i === (mine >= 0 ? mine : 0);
+      el.innerHTML = '<div class="pad-top"><span class="pad-face-wrap" data-em-slot="' + i + '"><span class="pad-face"></span></span>' + (canEm ? '<button type="button" class="pad-emote" data-slot="' + i + '" aria-label="React">' + EMOTE_ICO + '</button>' : '') + '<span class="pad-name">' + padLabel(i) + '</span><span class="pad-pts"></span>' + (S && S.bots.indexOf(i) >= 0 ? ((S.sim || SD.BUILD === 'cg') ? '' : '<kbd class="bot">BOT</kbd>') : S && (S.mode === 'boss' || S.nolocal.indexOf(i) >= 0) ? '' : (padKey(i) ? '<kbd>' + (padKey(i) === 'SPACE' ? 'SPC' : padKey(i)) + '</kbd>' : '')) + (showExit ? '<span class="pad-acts"><button type="button" class="pad-exit" aria-label="Exit">EXIT</button></span>' : '') + '</div><div class="pad-stage"></div><div class="pad-dock"></div><div class="pad-badge"></div>';
       padsEl.appendChild(el);
       var p = { el: el, faceEl: el.querySelector('.pad-face'), ptsEl: el.querySelector('.pad-pts'), stage: el.querySelector('.pad-stage'), badge: el.querySelector('.pad-badge'), dock: el.querySelector('.pad-dock'), mood: '', held: null };
       pads.push(p);
       var xb = el.querySelector('.pad-exit');
       if (xb) { xb.addEventListener('pointerdown', function (e) { e.stopPropagation(); e.preventDefault(); askLeave(); }); xb.addEventListener('click', function (e) { e.stopPropagation(); }); }
+      var eb = el.querySelector('.pad-emote');
+      if (eb) bindEmoteBtn(eb, i);
       setFace(i, 'idle');
       el.addEventListener('pointerdown', function (e) {
-        if (e.target && e.target.closest && e.target.closest('.ng-hit')) return;
+        if (e.target && e.target.closest && (e.target.closest('.ng-hit') || e.target.closest('.pad-acts') || e.target.closest('.pad-emote'))) return;
         e.preventDefault();
         if (p.held !== null) return;
         p.held = e.pointerId;
@@ -162,6 +330,7 @@ SD.games = SD.games || [];
       el.addEventListener('pointercancel', up);
       el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     })(i);
+    refreshEmoteBubbles();
   }
 
   function press(i, bot) {
@@ -289,10 +458,21 @@ SD.games = SD.games || [];
   function syncPw(n, ids, cb) {
     ids = ids || [];
     if (!S || !S.online) return cb([]);
-    S.online.peer.send({ t: 'pw', n: n, p: ids });
+    try { S.online.peer.send({ t: 'pw', n: n, p: ids }); } catch (e) {}
     if (S.peerPw[n]) return cb(S.peerPw[n]);
+    var shown = false;
+    function showWait() {
+      if (!S || !S.pwWait || S.pwWait.n !== n || shown) return;
+      shown = true;
+      var el = $('#pick');
+      el.innerHTML = '<div class="pk-card"><h2>' + (ids.length ? 'POWER-UP' : 'GET READY') + '</h2><p class="pk-wait">WAITING FOR OPPONENT...</p></div>';
+      el.hidden = false;
+      S.pickEnd = hidePick;
+    }
     S.pwWait = { n: n, go: function () { if (!S || !S.pwWait || S.pwWait.n !== n) return; S.pwWait = null; cb(S.peerPw[n] || []); } };
-    later(function () { if (S && S.pwWait && S.pwWait.n === n) S.pwWait.go(); }, 10000);
+    if (ids.length) showWait();
+    else later(showWait, 800);
+    later(function () { if (S && S.pwWait && S.pwWait.n === n) S.pwWait.go(); }, 8000);
   }
   function applyHead(slot, id) {
     if (id !== 'head' || S.commonOn[slot]) return id === 'head';
@@ -345,9 +525,6 @@ SD.games = SD.games || [];
       then();
     }
     if (!S.online) return go([]);
-    var el = $('#pick');
-    el.innerHTML = '<div class="pk-card"><h2>POWER-UP</h2><p class="pk-wait">WAITING FOR OPPONENT...</p></div>'; el.hidden = false;
-    S.pickEnd = hidePick;
     syncPw(n, ids, go);
   }
   function applyPeer(id) {
@@ -396,11 +573,10 @@ SD.games = SD.games || [];
       if (id && pw.by[id] && pw.by[id].kind === 'common' && pw.own(id) > 0) S.pocket = id; else S.pocket = null;
       if (S.pocket === 'head') applyHead(S.me, 'head');
       S.pwKey = (S.pwKey | 0) + 1;
+      var sent = S.pocket ? [S.pocket] : (id === 'head' ? ['head'] : []);
       if (!S.online) { hidePick(); return done(); }
-      var elw = $('#pick');
-      elw.innerHTML = '<div class="pk-card"><h2>POWER-UP</h2><p class="pk-wait">WAITING FOR OPPONENT...</p></div>'; elw.hidden = false;
-      S.pickEnd = hidePick;
-      syncPw(S.pwKey, S.pocket ? [S.pocket] : (id === 'head' ? ['head'] : []), function (peer) {
+      if (!sent.length) hidePick();
+      syncPw(S.pwKey, sent, function (peer) {
         hidePick();
         if (S && S.online) applyHead(1 - S.me, peer && peer[0]);
         if (S && !S.leaving) done();
@@ -883,19 +1059,20 @@ SD.games = SD.games || [];
     var top = series ? Math.max.apply(null, S.totals) : -1;
     var crowd = others.map(function (i) {
       var crown = series && S.totals[i] === top && top > S.totals[loser];
-      return '<span class="fan" data-i="' + i + '" data-crown="' + (crown ? 1 : 0) + '" style="animation-delay:' + (i * 0.08) + 's">' + art.face(i, 'idle', { crown: crown }) + '</span>';
+      return '<span class="fan" data-em-slot="' + i + '" data-i="' + i + '" data-crown="' + (crown ? 1 : 0) + '" style="animation-delay:' + (i * 0.08) + 's">' + art.face(i, 'idle', { crown: crown }) + '</span>';
     }).join('');
     $('#cereTitle').innerHTML = '&nbsp;'; $('#cereTitle').className = '';
     $('#cereLine').textContent = '';
     try { if (SD.ads && SD.ads.hideBanners) SD.ads.hideBanners(); } catch (e) {}
     $('#cereStage').innerHTML = (crowd ? '<div class="cs-crowd">' + crowd + '</div>' : '') +
-      '<div class="cs-loser"><div class="cs-face">' + art.face(loser, 'worry') + '</div><div class="cs-pie">' + art.icon('pie', 120) + '</div></div>';
+      '<div class="cs-loser"><div class="cs-face" data-em-slot="' + loser + '">' + art.face(loser, 'worry') + '</div><div class="cs-pie">' + art.icon('pie', 120) + '</div></div>';
     var btns = $('#cereBtns'); btns.hidden = true;
     var rate = $('#cereRate'); if (rate) { rate.hidden = true; rate.innerHTML = ''; }
     btns.innerHTML = '<button class="gel" id="bAgain" type="button" aria-label="Play again">' + art.icon('again', 30) + '</button>' +
       '<button class="gel alt" id="bHome" type="button" aria-label="Home">' + art.icon('home', 30) + '</button>' +
       '<button class="gel alt" id="bShare" type="button" aria-label="Share">' + art.icon('share', 30) + '</button>';
     ceremonyEl.hidden = false;
+    mountCereEmotes();
     var stage = $('#cereStage'), faceBox = stage.querySelector('.cs-face'), pie = stage.querySelector('.cs-pie');
     au.sfx.drum(1.0);
     stage.classList.add('tense');
@@ -905,6 +1082,7 @@ SD.games = SD.games || [];
       pie.style.visibility = 'hidden';
       faceBox.innerHTML = art.face(loser, 'pied');
       faceBox.classList.add('splat');
+      refreshEmoteBubbles();
       var c = fx.center(faceBox);
       fx.cream(c.x, c.y, 34); fx.shake(480); fx.flash('#ffffff'); fx.vibrate([90, 40, 120]);
       au.sfx.splat();
@@ -926,6 +1104,7 @@ SD.games = SD.games || [];
         var r = f.getBoundingClientRect();
         setTimeout(function () { fx.popText(r.left + r.width / 2, r.top, 'HA!', 'ha'); }, 120 * k);
       });
+      refreshEmoteBubbles();
       fx.rain(40);
       $('#cereLine').textContent = rnd(ROASTS);
     }, 1750);
@@ -1047,9 +1226,10 @@ SD.games = SD.games || [];
     if (m.t === 'd') onRemote('d');
     else if (m.t === 'u') onRemote('u');
     else if (m.t === 'x' && m.k != null) applyHit(S.spec ? 0 : 1 - S.me, m.k);
+    else if (m.t === 'em' && m.e) fireEmote(S.spec ? 0 : 1 - S.me, m.e, true);
     else if (m.t === 'go') onPeerGo(m);
     else if (m.t === 'r') { S.peerRes[m.n] = m; if (S.settle && m.n === S.roundNo) S.settle(); }
-    else if (m.t === 'pw') { S.peerPw[m.n] = Array.isArray(m.p) ? m.p.slice(0, 3) : []; if (S.pwWait && S.pwWait.n === m.n) S.pwWait.go(); }
+    else if (m.t === 'pw') { var kn = +m.n; S.peerPw[kn] = Array.isArray(m.p) ? m.p.slice(0, 3) : []; if (S.pwWait && +S.pwWait.n === kn) S.pwWait.go(); }
     else if (m.t === 'pu') { S.peerUse[m.n] = Array.isArray(m.p) ? m.p.slice(0, 3) : []; }
     else if (m.t === 'again') { S.online.againPeer = true; tryRematch(); }
     else if (m.t === 'start') { S.online.seed = m.seed; startSession('online', S.online); }
@@ -1097,6 +1277,7 @@ SD.games = SD.games || [];
     btns.innerHTML = (win ? '' : '<button class="gel" id="bAgain" type="button" aria-label="Try again">' + art.icon('again', 30) + '</button>') +
       '<button class="gel alt" id="bHome" type="button" aria-label="Home">' + art.icon('home', 30) + '</button>';
     btns.hidden = false; ceremonyEl.hidden = false;
+    mountCereEmotes();
     if (SD.feedback && SD.feedback.mount) SD.feedback.mount($('#cereRate'));
     if (win) { var c = fx.center($('#cereStage')); fx.confetti(c.x, c.y, 50, 1.2); fx.rain(50); au.sfx.cheer(); au.say(art.skinName(id) + ' unlocked!', { pitch: 1.8, rate: 1.05 }); try { if (SD.cg && SD.cg.happy) SD.cg.happy(); } catch (e) {} }
     var again = $('#bAgain'); if (again) again.onclick = function () { au.sfx.select(); afterAd(function () { startSession('boss'); }); };
@@ -1190,6 +1371,7 @@ SD.games = SD.games || [];
     if (m.t === 'd') onRemote('d', slot);
     else if (m.t === 'u') onRemote('u', slot);
     else if (m.t === 'x' && m.k != null) applyHit(slot, m.k);
+    else if (m.t === 'em' && m.e) fireEmote(slot, m.e, true);
   }
 
   /* ---------- safety net: an error during a match or end screen must never leave the player stuck ---------- */
@@ -1201,8 +1383,8 @@ SD.games = SD.games || [];
     document.body.appendChild(b);
   }
   function onCrash() {
-    var party = $('#party');
-    var inGame = (arenaEl && !arenaEl.hidden) || (ceremonyEl && !ceremonyEl.hidden) || (party && !party.hidden);
+    /* Only during a real match or end screen — not the party lobby (that wrongly dropped a HOME button over CHAT). */
+    var inGame = (arenaEl && !arenaEl.hidden) || (ceremonyEl && !ceremonyEl.hidden);
     if (inGame) setTimeout(rescue, 600);
   }
   window.addEventListener('error', onCrash);
@@ -1214,6 +1396,7 @@ SD.games = SD.games || [];
       arenaEl = $('#arena'); padsEl = $('#pads'); centerEl = $('#center'); timerEl = $('#timer'); exitEl = $('#btnExit'); ceremonyEl = $('#ceremony');
       exitEl.innerHTML = '<span>EXIT</span>';
       exitEl.addEventListener('click', function () { au.sfx.tap(); askLeave(); });
+      document.addEventListener('pointerdown', closeEmoteIfOut, true);
     },
     start: function (mode, opts) { startSession(mode, null, opts); },
     startOnline: function (conn) { startSession('online', conn); },
@@ -1222,7 +1405,9 @@ SD.games = SD.games || [];
     specSnap: function (snap) { applySnap(snap); },
     specEvent: function (slot, m) { specEvent(slot, m); },
     watching: function () { return !!(S && S.spec); },
+    playing: function () { return !!(S && !S.spec); },
     home: function () {
+      closeEmoteWheel();
       var rb = document.getElementById('rescueBtn'); if (rb) rb.remove();
       try { if (SD.cg) SD.cg.stop(); } catch (e) {}
       var spec = !!(S && S.spec), specStop = spec ? S.specStop : null;
@@ -1254,6 +1439,7 @@ SD.games = SD.games || [];
       $('#goText').classList.remove('on');
       SD.main && SD.main.refresh();
       au.music.start('menu');
+      try { if (SD.fresh && SD.fresh.try) SD.fresh.try(); } catch (e) {}
       try { if (SD.ads && SD.ads.showHomeBanner) SD.ads.showHomeBanner(); } catch (e) {}
     }
   };
