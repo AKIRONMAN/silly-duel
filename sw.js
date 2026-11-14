@@ -1,5 +1,5 @@
 /* Offline cache. Bump VERSION whenever you upload a new build so players get the update. */
-var VERSION = 'silly-duel-v132';
+var VERSION = 'silly-duel-v133';
 var FILES = [
   './', './index.html', './manifest.webmanifest', './css/style.css', './css/games2.css', './css/games3.css', './css/arenas.css', './css/skins.css', './css/dock.css', './css/party.css', './css/intro.css',
   './assets/fonts/Fredoka.ttf', './assets/fonts/Silkscreen-Regular.ttf', './assets/fonts/Silkscreen-Bold.ttf', './js/build.js', './js/powers.js', './js/storage.js', './js/ledger.js', './js/fit.js', './js/firebase-config.js', './js/art.js', './js/progress.js', './js/audio.js', './js/fx.js', './js/engine.js',

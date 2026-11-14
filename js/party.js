@@ -204,16 +204,8 @@
       show('<h2>REMOVED</h2><div class="on-face">' + art.face(0, 'sad') + '</div><p class="on-msg">' + esc(m.e || 'HOST REMOVED YOU') + '</p><button class="gel danger" id="pOk" type="button"><span>OHH NO</span></button>');
       bind('#pOk', leave);
     }
-    else if (m.t === 'hostOffer') {
-      SD.ask({
-        title: 'BECOME HOST?',
-        msg: (m.name || 'HOST') + ' wants you to become the host.',
-        yes: 'OKAY',
-        no: 'NO WAY'
-      }, function () { send({ t: 'acceptHost' }); });
-    }
     else if (m.t === 'hostNow') {
-      SD.ask({ title: 'YOU ARE HOST', msg: 'You can pick the games and start the room.', yes: 'OKAY', no: 'OKAY' }, function () {});
+      SD.ask({ title: 'YOU ARE THE NEW HOST', msg: 'You can pick the games and start the room.', yes: 'OKAY', no: 'OKAY' }, function () {});
     }
     else if (m.t === 'chat') {
       if (!V || (m.code && m.code !== V.code) || !m.v) return;
@@ -372,13 +364,15 @@
   }
   function pushChat(row) {
     if (!row || !row.msg) return;
-    var last = chatLog[chatLog.length - 1];
-    if (last && last.id === row.id && last.msg === row.msg && Math.abs((last.ts || 0) - (row.ts || 0)) < 800) return;
+    var i, hit = false;
+    for (i = chatLog.length - 1; i >= 0 && i >= chatLog.length - 6; i--) {
+      if (chatLog[i].id === row.id && chatLog[i].msg === row.msg) { hit = true; break; }
+    }
+    if (hit) return;
     chatLog.push(row); if (chatLog.length > 40) chatLog = chatLog.slice(-40);
     paintChat();
   }
-  function sendChat(payload, shown) {
-    if (shown) pushChat({ id: myId, name: st.name(0), msg: shown, ts: Date.now() });
+  function sendChat(payload) {
     send(payload);
   }
   function chatPopupHtml() {
@@ -422,7 +416,7 @@
       b.addEventListener('click', function () {
         au.sfx.tap();
         var pre = b.dataset.pre, label = b.dataset.label || b.textContent;
-        sendChat({ t: 'chat', pre: pre }, label);
+        sendChat({ t: 'chat', pre: pre });
         chatOpen = false;
         if (pop) pop.hidden = true;
       });
@@ -437,7 +431,7 @@
     bind('#pChatSend', function () {
       var raw = String((card.querySelector('#pChatIn') && card.querySelector('#pChatIn').value) || chatDraft || '').trim().slice(0, 15);
       if (!raw) return;
-      sendChat({ t: 'chat', msg: raw }, raw);
+      sendChat({ t: 'chat', msg: raw });
       chatDraft = '';
       var el = card.querySelector('#pChatIn'); if (el) el.value = '';
       chatOpen = false;
@@ -448,41 +442,37 @@
     var n = V.players.length, isHost = V.host === myId, okN = n >= 2 && n <= 10 && n % 2 === 0;
     var g = roomGames();
     var list = V.players.map(function (p) {
-      var acts = '';
-      if (isHost && p.id !== myId) {
-        acts = '<span class="tl-acts">' +
-          '<button type="button" class="tl-act host" data-id="' + p.id + '">HOST</button>' +
-          '<button type="button" class="tl-act kick" data-id="' + p.id + '">KICK</button></span>';
-      }
-      return '<div class="tl-p' + (p.away ? ' away' : '') + (p.id === V.host ? ' host' : '') + '">' + face(p) +
+      var tap = isHost && p.id !== myId;
+      return '<button type="button" class="tl-p' + (p.away ? ' away' : '') + (p.id === V.host ? ' host' : '') + (tap ? ' tap' : '') + '"' +
+        (tap ? ' data-id="' + p.id + '"' : ' tabindex="-1"') + '>' +
+        face(p) +
         '<b>' + esc(p.name) + (p.id === V.host ? ' *' : '') + '</b>' +
         (p.away ? '<small>AWAY</small>' : p.id === V.host ? '<small>HOST</small>' : '<small>LV ' + (p.level | 0) + '</small>') +
-        acts + '</div>';
+        '</button>';
     }).join('');
-    var toolsRow = '<div class="p-tools">' +
-      '<button type="button" class="gel alt p-chat-ico" id="pChatBtn" aria-label="Chat">' + art.icon('chat', 28) + '</button>' +
-      (isHost
-        ? '<div class="games-pick slim">' + [3, 5, 8].map(function (n2) {
-          return '<button type="button" class="games-n' + (g === n2 ? ' on' : '') + '" data-n="' + n2 + '">' + n2 + '</button>';
-        }).join('') + '</div>'
-        : '<p class="p-games-ro">BEST OF ' + g + '</p>') +
-      '</div>';
-    var foot = '<div class="p-foot">' +
+    var gamesRow = isHost
+      ? '<div class="games-pick slim p-games-row">' + [3, 5, 8].map(function (n2) {
+        return '<button type="button" class="games-n' + (g === n2 ? ' on' : '') + '" data-n="' + n2 + '">' + n2 + '</button>';
+      }).join('') + '</div>'
+      : '';
+    var startRow = '<div class="p-foot">' +
       (isHost
         ? '<button class="gel" id="pStart" type="button"' + (okN ? '' : ' disabled') + '><span>START' + (n >= 2 ? ' (' + n + ')' : '') + '</span></button>'
         : '<p class="on-msg p-wait">WAITING FOR HOST...</p>') +
       '<button class="gel alt" id="pInv" type="button">' + art.icon('invite', 26) + '<span>INVITE</span></button>' +
       '</div>';
+    var chatRow = '<div class="p-foot p-chat-row-btn"><button type="button" class="gel alt" id="pChatBtn">' + art.icon('chat', 26) + '<span>CHAT</span></button></div>';
     show('<div class="p-lobby">' +
       '<div class="p-lobby-top">' +
       '<h2>ROOM' + (V.pub ? ' · PUBLIC' : '') + '</h2><div class="t-code">' + esc(V.code) + '</div>' +
-      '<p class="on-note">' + (V.pub ? 'Public room. Anyone can find it.' : 'Share the code or invite link.') + '</p>' +
+      '<p class="on-note">' + (V.pub ? 'Public room. Anyone can find it.' : 'Share the code or invite link.') + (isHost ? ' Tap a player to make host or kick.' : '') + '</p>' +
       '<div class="tl-list">' + list + '</div>' +
       '<p class="on-msg tl"><small>' + n + ' / 10' + (okN ? '' : n < 2 ? ' · NEED ONE MORE' : ' · NEED EVEN NUMBER') + ' · BEST OF ' + g + '</small></p>' +
+      gamesRow +
       '<div class="p-chat-feed" id="pChatFeed">' + chatRowsHtml() + '</div>' +
       '<p class="on-err" id="pErr"></p>' +
       '</div>' +
-      '<div class="p-lobby-bot">' + toolsRow + foot + '</div>' +
+      '<div class="p-lobby-bot">' + startRow + chatRow + '</div>' +
       '</div>' + chatPopupHtml() + back('LEAVE'));
     if (isHost) {
       Array.prototype.forEach.call(card.querySelectorAll('.games-n'), function (b) {
@@ -493,25 +483,19 @@
           send({ t: 'setGames', games: n2 });
         });
       });
-      Array.prototype.forEach.call(card.querySelectorAll('.tl-act.host'), function (b) {
-        b.addEventListener('click', function (ev) {
-          ev.preventDefault(); ev.stopPropagation(); au.sfx.tap();
+      Array.prototype.forEach.call(card.querySelectorAll('.tl-p.tap'), function (b) {
+        b.addEventListener('click', function () {
+          au.sfx.tap();
           var id = +b.dataset.id, who = '';
           V.players.forEach(function (p) { if (p.id === id) who = p.name; });
           SD.ask({
-            title: 'MAKE HOST?',
-            msg: 'Are you sure you want ' + (who || 'this player') + ' to be host?',
-            yes: 'SURE',
-            no: 'KEEP WAITING'
-          }, function () { send({ t: 'offerHost', id: id }); });
-        });
-      });
-      Array.prototype.forEach.call(card.querySelectorAll('.tl-act.kick'), function (b) {
-        b.addEventListener('click', function (ev) {
-          ev.preventDefault(); ev.stopPropagation(); au.sfx.tap();
-          var id = +b.dataset.id, who = '';
-          V.players.forEach(function (p) { if (p.id === id) who = p.name; });
-          SD.ask({ title: 'REMOVE ' + (who || 'PLAYER') + '?', msg: 'They will leave this room.', yes: 'REMOVE', no: 'KEEP THEM' }, function () { send({ t: 'kick', id: id }); });
+            title: who || 'PLAYER',
+            msg: 'Make them host, or remove them from the room.',
+            yes: 'MAKE HOST',
+            no: 'CANCEL',
+            danger: 'KICK',
+            onDanger: function () { send({ t: 'kick', id: id }); }
+          }, function () { send({ t: 'makeHost', id: id }); });
         });
       });
     }

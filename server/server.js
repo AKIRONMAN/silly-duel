@@ -325,21 +325,13 @@ function handle(c, m) {
     case 'closeRoom': {
       var rx = rooms[c.room]; if (!rx || rx.host !== c.id || rx.phase !== 'lobby') return;
       closeRoom(rx, 'HOST CLOSED THE ROOM'); break; }
-    case 'offerHost': {
+    case 'makeHost': {
       var rh = rooms[c.room]; if (!rh || rh.host !== c.id || rh.phase !== 'lobby') return;
       var nid = m.id | 0;
       if (nid === c.id || rh.players.indexOf(nid) < 0) return;
-      rh.hostOffer = nid; rh.hostOfferFrom = c.id;
-      var tgt = clients[nid];
-      if (tgt) tgt.send({ t: 'hostOffer', from: c.id, name: c.name });
-      c.send({ t: 'hostOfferSent', id: nid });
-      break; }
-    case 'acceptHost': {
-      var ra = rooms[c.room]; if (!ra || ra.phase !== 'lobby') return;
-      if (ra.hostOffer !== c.id || ra.hostOfferFrom !== ra.host) { ra.hostOffer = 0; ra.hostOfferFrom = 0; return; }
-      ra.host = c.id; ra.hostOffer = 0; ra.hostOfferFrom = 0;
-      bcast(ra);
-      c.send({ t: 'hostNow' });
+      rh.host = nid; rh.hostOffer = 0; rh.hostOfferFrom = 0;
+      bcast(rh);
+      var nh = clients[nid]; if (nh) nh.send({ t: 'hostNow' });
       break; }
     case 'kick': {
       var rk = rooms[c.room]; if (!rk || rk.host !== c.id || rk.phase !== 'lobby') return;
