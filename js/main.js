@@ -782,7 +782,6 @@
     if (n < 1 || n > 5) { if (done) done(false); return; }
     fbStars = n;
     st.set('fbLast', n);
-    if (CG) { if (done) done(true); return; }
     if (!SD.net || !SD.net.sendFeedback) { if (done) done(true); return; }
     SD.net.sendFeedback('', n).then(function () { if (done) done(true); }, function () { if (done) done(true); });
   }
@@ -848,25 +847,14 @@
         err.textContent = 'WRITE A BIT MORE';
         return;
       }
-      if (CG) {
-        send.disabled = true;
-        au.sfx.select();
-        st.set('fbLast', fbStars);
-        st.set('fbNote', String(msg || '').slice(0, 400));
-        box.value = '';
-        fbStars = 0;
-        paintFbStars();
-        err.textContent = 'THANKS — SAVED';
-        err.classList.add('ok');
-        send.disabled = false;
-        return;
-      }
       if (!SD.net || !SD.net.sendFeedback) {
         err.textContent = 'NEED INTERNET';
         return;
       }
       send.disabled = true;
       au.sfx.select();
+      st.set('fbLast', fbStars);
+      st.set('fbNote', String(msg || '').slice(0, 400));
       SD.net.sendFeedback(msg, fbStars).then(function () {
         box.value = '';
         fbStars = 0;

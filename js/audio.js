@@ -211,6 +211,43 @@ window.SD = window.SD || {};
       [[210, 0], [170, 0.06], [285, 0.12], [240, 0.03], [190, 0.09]].forEach(function (v) {
         for (var i = 0; i < 7; i++) ha(t0 + v[1] + i * 0.17, v[0] * (1 - i * 0.025), 0.9 - i * 0.07);
       });
+    }),
+    emLaugh: gate(function () {
+      var a = ensure(), t0 = a.currentTime;
+      [[260, 0], [210, 0.08], [300, 0.16], [230, 0.24], [270, 0.32], [200, 0.4]].forEach(function (v) {
+        ha(t0 + v[1], v[0], 1);
+      });
+    }),
+    emSad: gate(function () {
+      tone({ type: 'sine', f: 440, f2: 280, d: 0.32, a: 0.1, v: 0.22 });
+      tone({ type: 'triangle', f: 300, f2: 170, t: 0.26, d: 0.5, v: 0.2, vib: [6, 10] });
+      tone({ type: 'sine', f: 210, f2: 90, t: 0.55, d: 0.55, v: 0.18 });
+      hiss({ t: 0.2, d: 0.4, type: 'bandpass', f: 1400, q: 0.8, v: 0.08 });
+    }),
+    emYes: gate(function () {
+      [659, 784, 988, 1175].forEach(function (f, i) { tone({ type: 'square', f: f, t: i * 0.055, d: 0.11, v: 0.12 }); });
+      tone({ type: 'sine', f: 1568, t: 0.22, d: 0.28, v: 0.1 });
+    }),
+    emNice: gate(function () {
+      tone({ type: 'sine', f: 784, d: 0.12, v: 0.18 });
+      tone({ type: 'sine', f: 1175, t: 0.1, d: 0.3, v: 0.16 });
+      tone({ type: 'triangle', f: 1568, t: 0.14, d: 0.22, v: 0.1 });
+    }),
+    emFire: gate(function () {
+      hiss({ d: 0.38, type: 'bandpass', f: 500, f2: 2000, q: 1.1, v: 0.32 });
+      tone({ type: 'sawtooth', f: 190, f2: 80, d: 0.32, v: 0.12, lp: 900 });
+      tone({ type: 'square', f: 520, f2: 280, t: 0.08, d: 0.16, v: 0.08 });
+    }),
+    emWow: gate(function () {
+      tone({ type: 'sine', f: 420, f2: 980, d: 0.26, a: 0.08, v: 0.24 });
+      tone({ type: 'triangle', f: 680, f2: 1180, t: 0.12, d: 0.22, v: 0.14 });
+      hiss({ t: 0.04, d: 0.18, type: 'highpass', f: 2400, v: 0.12 });
+    }),
+    emAngry: gate(function () {
+      tone({ type: 'sawtooth', f: 180, f2: 90, d: 0.22, v: 0.22, lp: 700 });
+      tone({ type: 'square', f: 280, f2: 140, t: 0.08, d: 0.2, v: 0.14, lp: 900 });
+      hiss({ d: 0.2, type: 'bandpass', f: 500, q: 1.4, v: 0.18 });
+      tone({ type: 'sawtooth', f: 140, f2: 70, t: 0.22, d: 0.28, v: 0.18, lp: 600 });
     })
   };
 

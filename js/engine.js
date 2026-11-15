@@ -262,8 +262,9 @@ SD.games = SD.games || [];
   art.padColor = colorOf;
   function padLabel(i) {
     var n = slotName(i);
-    if (S && !S.spec && (S.online || S.sim) && i === S.me) return esc(n) + '<i class="you-tag">YOU</i>';
-    return esc(n);
+    var nick = '<span class="pad-nick">' + esc(n) + '</span>';
+    if (S && !S.spec && (S.online || S.sim) && i === S.me) return nick + '<i class="you-tag">YOU</i>';
+    return nick;
   }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function slotName(i) {
@@ -308,7 +309,7 @@ SD.games = SD.games || [];
       el.style.setProperty('--pc', c.pad); el.style.setProperty('--pf', c.fill); el.style.setProperty('--pd', c.deep);
       var canEm = canSendEmote(i);
       var showExit = i === (mine >= 0 ? mine : 0);
-      el.innerHTML = '<div class="pad-top"><span class="pad-face-wrap" data-em-slot="' + i + '"><span class="pad-face"></span></span>' + (canEm ? '<button type="button" class="pad-emote" data-slot="' + i + '" aria-label="React">' + EMOTE_ICO + '</button>' : '') + '<span class="pad-name">' + padLabel(i) + '</span><span class="pad-pts"></span>' + (S && S.bots.indexOf(i) >= 0 ? ((S.sim || SD.BUILD === 'cg') ? '' : '<kbd class="bot">BOT</kbd>') : S && (S.mode === 'boss' || S.nolocal.indexOf(i) >= 0) ? '' : (padKey(i) ? '<kbd>' + (padKey(i) === 'SPACE' ? 'SPC' : padKey(i)) + '</kbd>' : '')) + (showExit ? '<span class="pad-acts"><button type="button" class="pad-exit" aria-label="Exit">EXIT</button></span>' : '') + '</div><div class="pad-stage"></div><div class="pad-dock"></div><div class="pad-badge"></div>';
+      el.innerHTML = '<div class="pad-top"><span class="pad-face-wrap" data-em-slot="' + i + '"><span class="pad-face"></span></span>' + (canEm ? '<button type="button" class="pad-emote" data-slot="' + i + '" aria-label="React">' + EMOTE_ICO + '</button>' : '') + '<span class="pad-meta"><span class="pad-name">' + padLabel(i) + '</span><span class="pad-pts"></span></span>' + (S && S.bots.indexOf(i) >= 0 ? ((S.sim || SD.BUILD === 'cg') ? '' : '<kbd class="bot">BOT</kbd>') : S && (S.mode === 'boss' || S.nolocal.indexOf(i) >= 0) ? '' : (padKey(i) ? '<kbd>' + (padKey(i) === 'SPACE' ? 'SPC' : padKey(i)) + '</kbd>' : '')) + (showExit ? '<span class="pad-acts"><button type="button" class="pad-exit" aria-label="Exit">EXIT</button></span>' : '') + '</div><div class="pad-stage"></div><div class="pad-dock"></div><div class="pad-badge"></div>';
       padsEl.appendChild(el);
       var p = { el: el, faceEl: el.querySelector('.pad-face'), ptsEl: el.querySelector('.pad-pts'), stage: el.querySelector('.pad-stage'), badge: el.querySelector('.pad-badge'), dock: el.querySelector('.pad-dock'), mood: '', held: null };
       pads.push(p);

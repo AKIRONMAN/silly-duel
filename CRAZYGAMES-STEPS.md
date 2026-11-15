@@ -93,7 +93,7 @@ Open the zip and confirm you see `index.html` immediately, next to `js`, `css`, 
 | **Platforms** | Desktop and mobile |
 | **In-app purchases** | No |
 | **Progress save** | **On** — CrazyGames Data module. Do not point them at Firebase or your own server. |
-| **Ads** | SDK midgame video after a finished match, plus a 320×50 banner on menu screens (home, MORE, PLAY WITH A FRIEND). Already in this build. |
+| **Ads** | **Off for Basic Launch** (`js/ads.js` is a no-op). Turn SDK banners/midgame back on for Full Launch. |
 
 Credit on MORE → About:
 

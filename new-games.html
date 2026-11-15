@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Silly Duel — new games preview</title>
+<link rel="icon" href="crazy-game/assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="crazy-game/css/style.css?v=12">
+<link rel="stylesheet" href="crazy-game/css/games-new.css?v=16">
+</head>
+<body>
+<div id="app">
+  <section id="pick" class="screen">
+    <div class="ng-pick">
+      <h1>NEW DUELS</h1>
+      <p class="ng-note">Preview only. Not in the real match yet.<br>P1 = <b>Q</b> / blue pad. P2 = <b>P</b> / pink pad.<br>Pie Dodge is the new one: hop lanes, dodge pies.</p>
+      <div class="ng-list" id="ngList"></div>
+    </div>
+  </section>
+
+  <main id="arena" class="screen" hidden data-count="2">
+    <div id="pads"></div>
+    <div id="seam"></div>
+    <div id="center"><div id="centerInner"></div></div>
+    <div id="goText" aria-hidden="true"></div>
+    <div id="hud"><div id="timer"><i></i></div></div>
+    <button class="icon-btn exit" id="btnExit" type="button" aria-label="Back">EXIT</button>
+    <div id="landAsk" hidden>
+      <div class="ng-win">TURN YOUR PHONE
+        <small>Sideways is better. Pads sit left and right, and the pie flies between you.</small>
+        <button type="button" id="landGo">I'M SIDEWAYS</button>
+        <button type="button" class="alt" id="landSkip">PLAY ANYWAY</button>
+      </div>
+    </div>
+  </main>
+
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <div id="flash" aria-hidden="true"></div>
+</div>
+
+<script src="crazy-game/js/build.js?v=9"></script>
+<script>window.SD = window.SD || {}; SD.games = SD.games || [];</script>
+<script src="crazy-game/js/storage.js?v=9"></script>
+<script src="crazy-game/js/art.js?v=9"></script>
+<script src="crazy-game/js/audio.js?v=9"></script>
+<script src="crazy-game/js/fx.js?v=9"></script>
+<script src="crazy-game/js/games/piedodge.js?v=16"></script>
+<script src="crazy-game/js/games/memory.js?v=12"></script>
+<script src="crazy-game/js/games/fillcard.js?v=12"></script>
+<script src="crazy-game/js/games/oddone.js?v=12"></script>
+<script src="crazy-game/js/games/whack.js?v=12"></script>
+<script src="crazy-game/js/games/quiettwin.js?v=14"></script>
+<script src="crazy-game/js/preview.js?v=16"></script>
+</body>
+</html>

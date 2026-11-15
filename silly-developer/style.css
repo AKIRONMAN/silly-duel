@@ -168,6 +168,7 @@ h2 {
 }
 .tag.cg { background: var(--sky); }
 .tag.server { background: var(--grape); color: #fff; }
+.tag.live { background: var(--mint); }
 .tag.soon { background: var(--lemon); }
 .tags { display: flex; flex-wrap: wrap; gap: 8px; position: relative; z-index: 1; }
 

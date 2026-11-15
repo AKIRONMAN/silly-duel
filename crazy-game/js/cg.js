@@ -40,9 +40,9 @@ window.SD = window.SD || {};
       C.user = u && u.username ? u : null;
       if (C.user) {
         var n = st.cleanName(C.user.username);
-        if (n.length >= 3 && st.get('acct') !== 'cg') {
-          st.setName(0, n);
-          st.set('acct', 'cg');
+        if (n.length >= 3 && !st.get('named')) {
+          st.setName(0, n, { soft: true });
+          st.quiet('acct', 'cg');
         }
       }
       if (SD.main) SD.main.refresh();

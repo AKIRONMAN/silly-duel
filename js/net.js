@@ -137,7 +137,7 @@ window.SD = window.SD || {};
       if (!u) return Promise.reject({ code: 'no-auth' });
       var name = String(st.name(0) || 'GUEST').slice(0, 14);
       if (!name) name = 'GUEST';
-      return FB.f.addDoc(coll('feedback'), { uid: u.uid, name: name, msg: msg, stars: stars | 0, ts: Date.now() });
+      return FB.f.addDoc(coll('feedback'), { uid: u.uid, name: name, msg: msg, stars: stars | 0, ts: Date.now(), src: 'web' });
     },
     iceWatch: function (id, side, cb) {
       return FB.f.onSnapshot(coll('rooms/' + id + '/ice'), function (snap) {

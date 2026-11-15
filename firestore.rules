@@ -33,7 +33,7 @@ service cloud.firestore {
     //
     // Collection: lobby — authenticated read, owner write
     // Collection: rooms / ice — authenticated matchmaking handshake
-    // Collection: feedback — authenticated create only (uid, name, msg, stars 1-5, ts)
+    // Collection: feedback — authenticated create only (uid, name, msg, stars 1-5, ts, optional src)
     //
     // ===============================================================
 
@@ -239,7 +239,7 @@ service cloud.firestore {
 
     match /feedback/{id} {
       allow create: if isAuthenticated()
-        && hasOnlyAllowedFields(['uid', 'name', 'msg', 'stars', 'ts'])
+        && hasOnlyAllowedFields(['uid', 'name', 'msg', 'stars', 'ts', 'src'])
         && hasRequiredFields(['uid', 'name', 'msg', 'stars', 'ts'])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.name is string
@@ -248,7 +248,10 @@ service cloud.firestore {
         && request.resource.data.msg is string
         && request.resource.data.msg.size() <= 400
         && intIn(request.resource.data.stars, 1, 5)
-        && validTs();
+        && validTs()
+        && (!('src' in request.resource.data)
+          || (request.resource.data.src is string
+            && request.resource.data.src in ['cg', 'web']));
       allow read, update, delete: if false;
     }
 

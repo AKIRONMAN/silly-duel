@@ -22,7 +22,9 @@
       "package.json",
       "package-lock.json",
       "firebase.json",
-      "firestore.rules"
+      "firestore.rules",
+      "new-games.html"
+
     ],
     "rewrites": [
       { "source": "**", "destination": "/index.html" }
